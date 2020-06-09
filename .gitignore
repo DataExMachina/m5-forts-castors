@@ -1,6 +1,7 @@
 # Data
 *.csv
 *.pkl
+*.parquet
 
 !data/submission/*.csv
 
