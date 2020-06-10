@@ -7,7 +7,7 @@ import lightgbm as lgb
 import fire
 
 RAW_PATH = 'data/raw/'
-REFINED_PATH = 'data/refined/'
+INTERIM_PATH = 'data/interim/'
 
 CAL_DTYPES = {
     "event_name_1": "category",
@@ -83,7 +83,7 @@ def data_prep(horizon="validation"):
         raise ValueError('Wrong value for horizon arg.')
     
     dataframe = create_dt(horizon, tr_last)
-    dataframe.to_parquet(os.path.join(REFINED_PATH, '%s_raw.parquet' % horizon))
+    dataframe.to_parquet(os.path.join(INTERIM_PATH, '%s_raw.parquet' % horizon))
 
 if __name__ == '__main__':
   fire.Fire(data_prep)
