@@ -236,7 +236,7 @@ def predict(horizon="validation", task="volume"):
             dataframe["sales"] = dataframe["sales"] / dt["gp_sales"]
             dataframe.drop(["gp_sales"], axis=1, inplace=True)
 
-    te_sub = dataframe.loc[te.date >= fday, ["id", "sales"]].copy()
+    te_sub = dataframe.loc[dataframe.date >= fday, ["id", "sales"]].copy()
     if horizon == "validation":
         te_sub.loc[te.date >= fday + timedelta(days=h), "id"] = te_sub.loc[
             te.date >= fday + timedelta(days=h), "id"
