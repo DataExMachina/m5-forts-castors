@@ -238,11 +238,11 @@ def predict(horizon="validation", task="volume"):
 
     te_sub = dataframe.loc[dataframe.date >= fday, ["id", "sales"]].copy()
     if horizon == "validation":
-        te_sub.loc[te.date >= fday + timedelta(days=h), "id"] = te_sub.loc[
+        te_sub.loc[dataframe.date >= fday + timedelta(days=h), "id"] = te_sub.loc[
             te.date >= fday + timedelta(days=h), "id"
         ].str.replace("validation", "evaluation")
     else:
-        te_sub.loc[te.date >= fday + timedelta(days=h), "id"] = te_sub.loc[
+        te_sub.loc[dataframe.date >= fday + timedelta(days=h), "id"] = te_sub.loc[
             te.date >= fday + timedelta(days=h), "id"
         ].str.replace("evaluation", "validation")
 
