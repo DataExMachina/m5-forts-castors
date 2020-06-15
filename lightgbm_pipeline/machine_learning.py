@@ -26,6 +26,7 @@ CAL_DTYPES = {
     "snap_TX": "float32",
     "snap_WI": "float32",
 }
+
 PRICE_DTYPES = {
     "store_id": "category",
     "item_id": "category",
@@ -47,7 +48,6 @@ def train(horizon="validation", task="volume"):
     ]
     useless_cols = ["id", "date", "sales", "d", "wm_yr_wk", "weekday", "rate"]
     train_cols = df.columns[~df.columns.isin(useless_cols)]
-    print(train_cols)
     X_train = df[train_cols]
     y_train = df["sales"]
 
@@ -70,10 +70,10 @@ def train(horizon="validation", task="volume"):
 
     if task == "volume":
         params["objective"] = "poisson"
-        params["num_iterations"] = 10
+        params["num_iterations"] = 15000
     elif task == "share":
         params["objective"] = "xentropy"
-        params["num_iterations"] = 10
+        params["num_iterations"] = 2000
 
     m_lgb = lgb.train(params, train_data)
     m_lgb.save_model(os.path.join(MODELS_PATH, "%s_%s_lgb.txt" % (horizon, task)))
@@ -218,8 +218,6 @@ def predict(horizon="validation", task="volume"):
         train_cols = tst.columns[~tst.columns.isin(useless_cols)]
         tst = tst.loc[tst.date == day, train_cols.tolist() + ["rate"]]
 
-        print(train_cols)
-
         if task == "volume":
             dataframe.loc[dataframe.date == day, "sales"] = tst["rate"] * m_lgb.predict(
                 tst[train_cols]
@@ -238,13 +236,19 @@ def predict(horizon="validation", task="volume"):
 
     te_sub = dataframe.loc[dataframe.date >= fday, ["id", "sales"]].copy()
     if horizon == "validation":
-        te_sub.loc[dataframe.date >= fday + timedelta(days=h), "id"] = te_sub.loc[
-            te.date >= fday + timedelta(days=h), "id"
+        te_sub.loc[dataframe.date >= fday + timedelta(days=28), "id"] = te_sub.loc[
+            dataframe.date >= fday + timedelta(days=28), "id"
         ].str.replace("validation", "evaluation")
     else:
-        te_sub.loc[dataframe.date >= fday + timedelta(days=h), "id"] = te_sub.loc[
-            te.date >= fday + timedelta(days=h), "id"
-        ].str.replace("evaluation", "validation")
+        te_sub.loc[dataframe.date >= fday + timedelta(days=28), "id"] = te_sub.loc[
+            dataframe.date >= fday + timedelta(days=28), "id"
+        ]
+        te_sub_validation = te_sub.copy()
+        te_sub_validation["id"] = te_sub_validation["id"].str.replace(
+            "evaluation", "validatiobn"
+        )
+        te_sub = pd.concat([te_sub, te_sub_validation])
+        print(te_sub)
 
     te_sub["F"] = [f"F{rank}" for rank in te_sub.groupby("id")["id"].cumcount() + 1]
     te_sub = (
