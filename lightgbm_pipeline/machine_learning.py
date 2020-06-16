@@ -223,7 +223,7 @@ def predict(horizon="validation", task="volume"):
                 tst[train_cols]
             )
         elif task == "share":
-            dataframe.loc[te.date == day, "sales"] = m_lgb.predict(tst[train_cols])
+            dataframe.loc[dataframe.date == day, "sales"] = m_lgb.predict(tst[train_cols])
             shares = (
                 dataframe.groupby(["dept_id", "store_id", "date"])["sales"]
                 .sum()
