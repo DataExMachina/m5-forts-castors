@@ -13,6 +13,7 @@ from skopt import gp_minimize
 from skopt.utils import use_named_args
 from skopt.space import Real, Categorical, Integer
 from skopt.callbacks import CheckpointSaver, VerboseCallback
+from skopt import load
 
 from conf import cat_feats, REFINED_PATH, useless_cols, MODELS_PATH
 
@@ -200,6 +201,9 @@ def train_mlp(horizon="validation", task="volume", mlp_params=None, training_par
     df = pd.read_parquet(
         os.path.join(REFINED_PATH, "%s_%s_fe.parquet" % (horizon, task))
     )
+    df[cat_feats].fillna(-1,inplace=True)
+    df.dropna(inplace=True)
+    
     num_feats = df.columns[~df.columns.isin(useless_cols + cat_feats)].to_list()
 
     input_dict, y_train, cardinality, weights_train = df_to_tf(df, cat_feats, useless_cols, use_validation=False)
@@ -215,10 +219,15 @@ def train_mlp(horizon="validation", task="volume", mlp_params=None, training_par
             'cardinality': cardinality,
             'verbose': 1
         }
+
     mdl = create_mlp(**mlp_params)
+    try:
+        tfk.utils.plot_model(mdl,show_shapes=True)
+    except:
+        print('Impossible to plot the model')
 
-    tfk.utils.plot_model(mdl,show_shapes=True)
-
+              
+              
     # checkpointsthe model to reload the best parameters
     model_save = tfk.callbacks.ModelCheckpoint('model_checkpoints',
                                                verbose=0)
@@ -240,34 +249,37 @@ def train_mlp(horizon="validation", task="volume", mlp_params=None, training_par
             'callbacks': [model_save, early_stopping]
         }
 
-    history = mdl.fit(input_dict,
-                      y_train.values,
-                      batch_size=4096,
-                      epochs=100,
-                      shuffle=True,
-                      sample_weight=weights_train.values)
+    history = mdl.fit(**training_params)
 
-    mdl.save(MODELS_PATH + 'keras_tweedie.h5')
+    mdl.save((os.path.join(MODELS_PATH, "%s_%s_tf.h5" % (horizon, task))))
 
 
 def grid_train(horizon="validation", task="volume"):
     dim_learning_rate = Real(low=1e-3, high=1e-2, prior='log-uniform', name='learning_rate')
+    dim_num_epoch = Integer(low=5, high=150, name='num_epoch')
+              
     dim_num_dense_layers = Integer(low=1, high=3, name='num_dense_layers')
     dim_num_dense_nodes = Integer(low=32, high=512, name='num_dense_nodes')
     dim_batch_size = Integer(low=2048, high=10000, name='batch_size')
     dim_emb_dim = Integer(low=10, high=50, name='emb_dim')
     dim_loss_fn = Categorical(categories=['poisson', 'tweedie'], name='loss_fn')
+    dim_weigth =  Categorical(categories=[True, False], name='do_weigth')
 
     dimensions = [dim_learning_rate,
+                  dim_num_epoch,
                   dim_num_dense_layers,
                   dim_num_dense_nodes,
                   dim_emb_dim,
                   dim_batch_size,
                   dim_loss_fn,
+                  dim_weigth
                   ]
     df = pd.read_parquet(
         os.path.join(REFINED_PATH, "%s_%s_fe.parquet" % (horizon, task))
     )
+    df[cat_feats].fillna(-1,inplace=True)
+    df.dropna(inplace=True)
+    
     num_feats = df.columns[~df.columns.isin(useless_cols + cat_feats)].to_list()
 
     input_dict, y_train, input_dict_test, y_test, cardinality, weights_train = df_to_tf(df, cat_feats, useless_cols,
@@ -275,11 +287,13 @@ def grid_train(horizon="validation", task="volume"):
 
     @use_named_args(dimensions=dimensions)
     def fitness(learning_rate,
+                epoch = num_epoch,
                 num_dense_layers,
                 num_dense_nodes,
                 batch_size,
                 emb_dim,
                 loss_fn,
+                dim_weigth,
                 ):
 
         # generate a list of the MLP architecture
@@ -305,18 +319,35 @@ def grid_train(horizon="validation", task="volume"):
                                                      patience=10,
                                                      verbose=0,
                                                      restore_best_weights=True)
-        history = model.fit(input_dict,
-                            y_train.values,
-                            validation_data=(input_dict_test, y_test.values),
-                            batch_size=batch_size,
-                            epochs=100,
-                            shuffle=True,
-                            sample_weight=weights_train.values,
-                            callbacks=[model_save, early_stopping],
-                            verbose=0,
-                            )
+              
+        if do_weigth:
+            history = model.fit(input_dict,
+                y_train.values,
+                validation_data=(input_dict_test, y_test.values),
+                batch_size=batch_size,
+                epochs=num_epoch,
+                shuffle=True,
+                sample_weight=weights_train.values,
+                callbacks=[model_save, early_stopping],
+                verbose=0,
+                ) 
+              
+        else:
+            history = model.fit(input_dict,
+                                y_train.values,
+                                validation_data=(input_dict_test, y_test.values),
+                                batch_size=batch_size,
+                                epochs=num_epoch,
+                                shuffle=True,
+                                callbacks=[model_save, early_stopping],
+                                verbose=0,
+                                )
+              
+              
+              
+           
         # return the validation accuracy for the last epoch.
-        rmse = history.history['val_root_mean_squared_error'][-1]
+        rmse =  model.evaluate(input_dict_test, y_test.values, batch_size=10000)[-1]
 
         # Print the classification accuracy.
         print()
@@ -325,13 +356,14 @@ def grid_train(horizon="validation", task="volume"):
 
         global best_rmse
         if rmse < best_rmse:
-            model.save(MODELS_PATH + 'keras_best_model.h5')
+            model.save((os.path.join(MODELS_PATH, "%s_%s_best_tf.h5" % (horizon, task))))
             best_rmse = rmse
             mlp_params = {
                 'layers_list': list_layer,  # [512, 256, 128, 64]
                 'emb_dim': emb_dim,
                 'loss_fn': loss_fn,
                 'learning_rate': learning_rate,
+                'num_epoch'  : num_epoch,
                 'optimizer': tfk.optimizers.Adam,
                 'cat_feats': cat_feats,
                 'num_feats': num_feats,
@@ -350,14 +382,29 @@ def grid_train(horizon="validation", task="volume"):
         gc.collect()
         return rmse
 
-    checkpoint_callback = skopt.callbacks.CheckpointSaver("./result.pkl")
+    checkpoint_callback = skopt.callbacks.CheckpointSaver("./checkpoint.pkl")
+    try:
+        res = load('./checkpoint.pkl')
+        x0 = res.x_iters
+        y0 = res.func_vals
+        best_rmse = min(y0)
+        gp_result = gp_minimize(func=fitness,
+                                dimensions=dimensions,
+                                n_calls=10,
+                                x0=x0,              
+                                y0=y0,              
+                                n_jobs=1,
+                                verbose=True,
+                                callback=[checkpoint_callback],
+                                )
+    except:
 
-    best_rmse = 1000
-    gp_result = gp_minimize(func=fitness,
-                            dimensions=dimensions,
-                            n_calls=20,
-                            n_jobs=1,
-                            verbose=True,
-                            callback=[checkpoint_callback],
-                            )
+        best_rmse = 1000
+        gp_result = gp_minimize(func=fitness,
+                                dimensions=dimensions,
+                                n_calls=20,
+                                n_jobs=1,
+                                verbose=True,
+                                callback=[checkpoint_callback],
+                                )
     print(gp_result.best_params_)

@@ -4,6 +4,8 @@ import fire
 import numpy as np
 import json
 import pandas as pd
+import tensorflow as tf 
+import tensorflow.keras as tfk 
 
 from tf_utils import train_mlp, grid_train
 from conf import RAW_PATH, PRICE_DTYPES, CAL_DTYPES, REFINED_PATH
@@ -95,13 +97,106 @@ def create_fea(dt):
             dt[date_feat_name] = getattr(dt["date"].dt, date_feat_func).astype("int16")
     return dt
 
+def predict(horizon="validation", task="volume"):
+    if horizon == "validation":
+        tr_last = 1913
+        fday = datetime(2016, 4, 25)
+    elif horizon == "evaluation":
+        tr_last = 1941
+        fday = datetime(2016, 4, 25) + timedelta(days=28)
+    else:
+        raise ValueError("Wrong value for horizon arg.")
+
+    dataframe = create_dt(horizon, tr_last)
+
+    if task == "share":
+        dataframe = compute_share(dataframe)
+    elif task != "volume":
+        raise ValueError("Wrong value for task.")
+
+    mdl = tfk.models.load_model(os.path.join(MODELS_PATH, "%s_%s_lgb.txt" % (horizon, task)))
+
+    cat_feats = ["item_id", "dept_id", "store_id", "cat_id", "state_id"] + [
+        "event_name_1",
+        "event_name_2",
+        "event_type_1",
+        "event_type_2",
+    ]
+    useless_cols = ["id", "date", "sales", "d", "wm_yr_wk", "weekday", "rate"]
+
+    for i in range(0, 28):
+        day = fday + timedelta(days=i)
+        tst = dataframe[
+            (dataframe.date >= day - timedelta(days=366)) & (dataframe.date <= day)
+        ].copy()
+
+        tst = create_fea(tst)
+        train_cols = tst.columns[~tst.columns.isin(useless_cols)]
+        tst = tst.loc[tst.date == day, train_cols.tolist() + ["rate"]]
+
+        if task == "volume":
+            input_dict_predict = {f"input_{col}": tst[col] for col in tst.columns}            
+            dataframe.loc[dataframe.date == day, "sales"] = tst["rate"] * mdl.predict(tst[train_cols],batch_size=10000)
+            
+        elif task == "share":
+            #
+            ## not ready yet for deep learning 
+            #
+            train_cols = tst.columns[~tst.columns.isin(useless_cols)]
+            dataframe.loc[te.date == day, "sales"] = * mdl.predict(tst[train_cols],batch_size=10000)
+            shares = (
+                dataframe.groupby(["dept_id", "store_id", "date"])["sales"]
+                .sum()
+                .reset_index()
+                .rename(columns={"sales": "gp_sales"})
+            )
+            dataframe = dataframe.merge(shares, how="left")
+            dataframe["sales"] = dataframe["sales"] / dt["gp_sales"]
+            dataframe.drop(["gp_sales"], axis=1, inplace=True)
+
+    te_sub = dataframe.loc[dataframe.date >= fday, ["id", "sales"]].copy()
+    if horizon == "validation":
+        te_sub.loc[dataframe.date >= fday + timedelta(days=28), "id"] = te_sub.loc[
+            dataframe.date >= fday + timedelta(days=28), "id"
+        ].str.replace("validation", "evaluation")
+    else:
+        te_sub.loc[dataframe.date >= fday + timedelta(days=28), "id"] = te_sub.loc[
+            dataframe.date >= fday + timedelta(days=28), "id"
+        ]
+        te_sub_validation = te_sub.copy()
+        te_sub_validation["id"] = te_sub_validation["id"].str.replace(
+            "evaluation", "validatiobn"
+        )
+        te_sub = pd.concat([te_sub, te_sub_validation])
+        print(te_sub)
+
+    te_sub["F"] = [f"F{rank}" for rank in te_sub.groupby("id")["id"].cumcount() + 1]
+    te_sub = (
+        te_sub.set_index(["id", "F"])
+        .unstack()["sales"][[f"F{i}" for i in range(1, 29)]]
+        .reset_index()
+    )
+    te_sub.fillna(0.0, inplace=True)
+
+    if task == "volume":
+        te_sub.to_csv(
+            os.path.join(SUBMIT_PATH, "tf_estim_%s.csv" % horizon), index=False
+        )
+    else:
+        te_sub.to_csv(
+            os.path.join(EXTERNAL_PATH, "tf_weights_%s.csv" % horizon), index=False
+        )
+        
+        
+        
+        
 
 def ml_pipeline(horizon="validation", task="volume", ml="train_and_predict"):
     if ml == "train_and_predict":
         train_mlp(horizon, task)
-        # predict(horizon, task)
-    # elif ml == "predict":
-        # predict(horizon, task)
+        predict(horizon, task)
+    elif ml == "predict":
+        predict(horizon, task)
 
     elif ml=='train_grid':
         grid_train(horizon, task)
