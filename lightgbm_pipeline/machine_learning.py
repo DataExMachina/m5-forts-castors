@@ -231,7 +231,7 @@ def predict(horizon="validation", task="volume"):
                 .rename(columns={"sales": "gp_sales"})
             )
             dataframe = dataframe.merge(shares, how="left")
-            dataframe["sales"] = dataframe["sales"] / dt["gp_sales"]
+            dataframe["sales"] = dataframe["sales"] / dataframe["gp_sales"]
             dataframe.drop(["gp_sales"], axis=1, inplace=True)
 
     te_sub = dataframe.loc[dataframe.date >= fday, ["id", "sales"]].copy()
@@ -248,7 +248,6 @@ def predict(horizon="validation", task="volume"):
             "evaluation", "validatiobn"
         )
         te_sub = pd.concat([te_sub, te_sub_validation])
-        print(te_sub)
 
     te_sub["F"] = [f"F{rank}" for rank in te_sub.groupby("id")["id"].cumcount() + 1]
     te_sub = (
