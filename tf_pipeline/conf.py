@@ -5,6 +5,7 @@ EXTERNAL_PATH = "../data/external/"
 SUBMIT_PATH = "../data/submission/"
 MODELS_PATH = "../data/models/"
 
+
 CAL_DTYPES = {
     "event_name_1": "category",
     "event_name_2": "category",
@@ -43,9 +44,9 @@ useless_cols = ["id",
                 "sales",
                 "d",
                 "wm_yr_wk",
-                "weekday"
+                "weekday",
+                "rate"
                ]
 
 
-# tensorflow paramters
 
