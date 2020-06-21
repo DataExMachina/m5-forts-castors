@@ -4,7 +4,6 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # FATAL
 logging.getLogger('tensorflow').setLevel(logging.FATAL)
 
 from datetime import datetime, timedelta
-
 import fire
 import lightgbm as lgb
 import numpy as np
@@ -178,11 +177,14 @@ def predict(horizon="validation", task="volume", ensembling_type='avg'):
         raise ValueError("Wrong value for task.")
 
     # gather both models
+    print('>>>  load the two models ')
     m_lgb = lgb.Booster(
         model_file=os.path.join(MODELS_PATH, "%s_%s_lgb.txt" % (horizon, task))
     )
+    print('--- lgbm ok  ')
     m_tf = tfk.models.load_model((os.path.join(MODELS_PATH, "%s_%s_tf.h5" % (horizon, task))))
-    print('Start to make predictions ')
+    print('--- tf ok  ')
+    print('>>> start to make predictions ')
     for i in tqdm(range(0, 28)):
         day = fday + timedelta(days=i)
         tst = dataframe[
