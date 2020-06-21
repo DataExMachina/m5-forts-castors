@@ -4,13 +4,18 @@ import tensorflow as tf
 import tensorflow.keras as tfk
 import gc
 import os
-import json
+from tqdm import tqdm
+import pickle
 
 from conf import cat_feats, REFINED_PATH, useless_cols, MODELS_PATH
 
 tfkl = tfk.layers
 K = tfk.backend
 np.random.seed(42)
+
+
+## evaluation metric
+## from https://www.kaggle.com/c/m5-forecasting-accuracy/discussion/133834 and edited to get scores at all levels
 
 def df_to_tf(df, cat_feats, useless_cols, use_validation=True):
     """
@@ -188,7 +193,7 @@ def create_mlp(layers_list=None, emb_dim=30, loss_fn='poisson', learning_rate=1e
     return model
 
 
-def train_mlp(horizon="validation", task="volume", mlp_params=None, training_params=None):
+def train_mlp(horizon="validation",task='volume', training_params=None):
     df = pd.read_parquet(
         os.path.join(REFINED_PATH, "%s_%s_fe.parquet" % (horizon, task))
     )
@@ -197,20 +202,12 @@ def train_mlp(horizon="validation", task="volume", mlp_params=None, training_par
 
     num_feats = df.columns[~df.columns.isin(useless_cols + cat_feats)].to_list()
     input_dict, y_train, cardinality, weights_train = df_to_tf(df, cat_feats, useless_cols, use_validation=False)
-    if mlp_params is None:
-        mlp_params = {  # currently non best paramters
-            'layers_list': [128, 128, 64, 64, 32],  # [512, 256, 128, 64]
-            'emb_dim': 30,
-            'loss_fn': 'poisson',
-            'learning_rate': 1e-3,
-            'optimizer': tfk.optimizers.Adam,
-            'cat_feats': cat_feats,
-            'num_feats': num_feats,
-            'cardinality': cardinality,
-            'verbose': 1
-        }
+    with open(MODELS_PATH + 'best_params.pkl', 'rb') as f:
+        params = pickle.load(f)
 
-    mdl = create_mlp(**mlp_params)
+    mdl = create_mlp(layers_list=params['layers_list'], emb_dim=params['emb_dim'], loss_fn=params['loss_fn'], learning_rate=params['learning_rate'],
+                       optimizer=tfk.optimizers.Adam, cat_feats=cat_feats, num_feats=num_feats,
+                       cardinality=params['cardinality'], verbose=0)
     try:
         tfk.utils.plot_model(mdl, show_shapes=True)
     except:
@@ -221,21 +218,31 @@ def train_mlp(horizon="validation", task="volume", mlp_params=None, training_par
                                                verbose=0)
 
     # Early stopping callback
-    early_stopping = tfk.callbacks.EarlyStopping('val_root_mean_squared_error',
+    early_stopping = tfk.callbacks.EarlyStopping('root_mean_squared_error',
                                                  patience=10,
                                                  verbose=0,
                                                  restore_best_weights=True)
 
     if training_params is None:
-        training_params = {
-            'x': input_dict,
-            'y': y_train.values,
-            'batch_size': 4096,
-            'epochs': 100,
-            'shuffle': True,
-            'sample_weight': weights_train.values,
-            'callbacks': [model_save, early_stopping]
-        }
+        if params['do_weigth']:
+            training_params = {
+                'x': input_dict,
+                'y': y_train.values,
+                'batch_size': 4096,
+                'epochs': params['num_epoch'],
+                'shuffle': True,
+                'sample_weight': weights_train,
+                'callbacks': [model_save, early_stopping]
+            }
+        else:
+            training_params = {
+                'x': input_dict,
+                'y': y_train.values,
+                'batch_size': 4096,
+                'epochs': params['num_epoch'],
+                'shuffle': True,
+                'callbacks': [model_save, early_stopping]
+            }
 
     mdl.fit(**training_params)
 

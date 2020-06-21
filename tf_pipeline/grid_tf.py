@@ -128,7 +128,8 @@ def fitness(learning_rate,
                 'cat_feats': cat_feats,
                 'num_feats': num_feats,
                 'cardinality': cardinality,
-                'do_weigth' : do_weigth
+                'do_weigth' : do_weigth,
+                'batch_size' : batch_size,
                 }
 
         plt.figure(figsize=(20,10))

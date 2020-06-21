@@ -4,12 +4,10 @@ from datetime import timedelta, datetime
 import fire
 import numpy as np
 import pandas as pd
-import tensorflow as tf
 
 import tensorflow.keras as tfk
-from conf import RAW_PATH, PRICE_DTYPES, CAL_DTYPES
 from tf_utils import train_mlp
-from conf import MODELS_PATH, SUBMIT_PATH, EXTERNAL_PATH
+from conf import *
 
 def create_dt(horizon="validation", tr_last=1913):
     prices = pd.read_csv(os.path.join(RAW_PATH, "sell_prices.csv"), dtype=PRICE_DTYPES)
@@ -65,6 +63,50 @@ def create_dt(horizon="validation", tr_last=1913):
 
     return dt
 
+def train(horizon="validation", task="volume"):
+
+    df = pd.read_parquet(
+        os.path.join(REFINED_PATH, "%s_%s_fe.parquet" % (horizon, task))
+    )
+    cat_feats = ["item_id", "dept_id", "store_id", "cat_id", "state_id"] + [
+        "event_name_1",
+        "event_name_2",
+        "event_type_1",
+        "event_type_2",
+    ]
+    useless_cols = ["id", "date", "sales", "d", "wm_yr_wk", "weekday", "rate"]
+    train_cols = df.columns[~df.columns.isin(useless_cols)]
+    X_train = df[train_cols]
+    y_train = df["sales"]
+
+    train_data = lgb.Dataset(
+        X_train, label=y_train, categorical_feature=cat_feats, free_raw_data=False
+    )
+
+
+    params = {
+        "metric": "rmse",
+        "force_row_wise": True,
+        "learning_rate": 0.075,
+        "sub_feature": 0.8,
+        "sub_row": 0.75,
+        "bagging_freq": 1,
+        "lambda_l2": 0.1,
+        "nthread": 16,
+        "metric": ["rmse"],
+        "verbosity": 1,
+    }
+
+    if task == "volume":
+        params["objective"] = "poisson"
+        params["num_iterations"] = 15000
+    elif task == "share":
+        params["objective"] = "xentropy"
+        params["num_iterations"] = 2000
+
+    m_lgb = lgb.train(params, train_data)
+    m_lgb.save_model(os.path.join(MODELS_PATH, "%s_%s_lgb.txt" % (horizon, task)))
+
 
 def create_fea(dt):
     lags = [7, 28]
@@ -115,8 +157,7 @@ def predict(horizon="validation", task="volume"):
     elif task != "volume":
         raise ValueError("Wrong value for task.")
 
-    mdl = tfk.models.load_model(os.path.join(MODELS_PATH, "%s_%s_best_tf.h5" % (horizon, task)))
-    useless_cols = ["id", "date", "sales", "d", "wm_yr_wk", "weekday", "rate"]
+    mdl = tfk.models.load_model((os.path.join(MODELS_PATH, "%s_%s_tf.h5" % (horizon, task))))
 
     for i in range(0, 28):
         day = fday + timedelta(days=i)
@@ -125,19 +166,18 @@ def predict(horizon="validation", task="volume"):
             ].copy()
 
         tst = create_fea(tst)
-
         train_cols = tst.columns[~tst.columns.isin(useless_cols)]
         tst = tst.loc[tst.date == day, train_cols.tolist() + ["rate"]]
-        print(tst.dtypes)
+        input_dict_predict = {f"input_{col}": tst[col] for col in train_cols}
+
         if task == "volume":
-            input_dict_predict = {f"input_{col}": tst[col] for col in train_cols}
-            dataframe.loc[dataframe.date == day, "sales"] = tst["rate"] * mdl.predict(input_dict_predict, batch_size=10000)
+            predictions = mdl.predict(input_dict_predict, batch_size=10000)
+            dataframe.loc[dataframe.date == day, "sales"] = tst["rate"] * predictions.flatten()
 
         elif task == "share":
             #
             ## not ready yet for deep learning 
             #
-            input_dict_predict = {f"input_{col}": tst[col] for col in tst.columns}
             dataframe.loc[te.date == day, "sales"] = mdl.predict(input_dict_predict, batch_size=10000)
             shares = (
                 dataframe.groupby(["dept_id", "store_id", "date"])["sales"]
@@ -183,7 +223,7 @@ def predict(horizon="validation", task="volume"):
         )
 
 
-def ml_pipeline(horizon="validation", task="volume", ml="predict"):
+def ml_pipeline(horizon="validation", task="volume", ml="train_and_predict"):
     if ml == "train_and_predict":
         train_mlp(horizon, task)
         predict(horizon, task)
@@ -191,8 +231,6 @@ def ml_pipeline(horizon="validation", task="volume", ml="predict"):
         predict(horizon, task)
     else:
         raise ValueError('ml arg must be "train_and_predict" or "predict" or "train_grid"')
-
-
 
 if __name__ == "__main__":
     fire.Fire(ml_pipeline)
