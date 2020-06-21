@@ -2,8 +2,11 @@
 *.csv
 *.pkl
 *.parquet
+*.json
 
-!data/submission/*.csv
+!data/submission/*
+!data/external/*
+!data/models/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
