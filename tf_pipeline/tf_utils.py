@@ -1,10 +1,9 @@
+import os
 import pandas as pd
 import numpy as np
 import tensorflow as tf
 import tensorflow.keras as tfk
 import gc
-import os
-from tqdm import tqdm
 import pickle
 
 from conf import cat_feats, REFINED_PATH, useless_cols, MODELS_PATH
@@ -12,10 +11,9 @@ from conf import cat_feats, REFINED_PATH, useless_cols, MODELS_PATH
 tfkl = tfk.layers
 K = tfk.backend
 np.random.seed(42)
-
+tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 
 ## evaluation metric
-## from https://www.kaggle.com/c/m5-forecasting-accuracy/discussion/133834 and edited to get scores at all levels
 
 def df_to_tf(df, cat_feats, useless_cols, use_validation=True):
     """

@@ -1,13 +1,18 @@
+import logging
 import os
-from datetime import timedelta, datetime
 
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # FATAL
+logging.getLogger('tensorflow').setLevel(logging.FATAL)
+from datetime import timedelta, datetime
+from tqdm import tqdm
 import fire
 import numpy as np
 import pandas as pd
-
+import tensorflow as tf
 import tensorflow.keras as tfk
 from tf_utils import train_mlp
 from conf import *
+tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 
 def create_dt(horizon="validation", tr_last=1913):
     prices = pd.read_csv(os.path.join(RAW_PATH, "sell_prices.csv"), dtype=PRICE_DTYPES)
@@ -159,7 +164,7 @@ def predict(horizon="validation", task="volume"):
 
     mdl = tfk.models.load_model((os.path.join(MODELS_PATH, "%s_%s_tf.h5" % (horizon, task))))
 
-    for i in range(0, 28):
+    for i in tqdm(range(0, 28)):
         day = fday + timedelta(days=i)
         tst = dataframe[
             (dataframe.date >= day - timedelta(days=366)) & (dataframe.date <= day)
@@ -223,7 +228,7 @@ def predict(horizon="validation", task="volume"):
         )
 
 
-def ml_pipeline(horizon="validation", task="volume", ml="train_and_predict"):
+def ml_pipeline(horizon="validation", task="volume", ml="predict"):
     if ml == "train_and_predict":
         train_mlp(horizon, task)
         predict(horizon, task)
