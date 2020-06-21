@@ -73,7 +73,7 @@ def train(horizon="validation", task="volume"):
         params["num_iterations"] = 15000
     elif task == "share":
         params["objective"] = "xentropy"
-        params["num_iterations"] = 2000
+        params["num_iterations"] = 15000
 
     m_lgb = lgb.train(params, train_data)
     m_lgb.save_model(os.path.join(MODELS_PATH, "%s_%s_lgb.txt" % (horizon, task)))
