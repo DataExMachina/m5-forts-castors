@@ -1,9 +1,9 @@
-RAW_PATH = "../data/raw/"
-INTERIM_PATH = "../data/interim/"
-REFINED_PATH = "../data/refined/"
-EXTERNAL_PATH = "../data/external/"
-SUBMIT_PATH = "../data/submission/"
-MODELS_PATH = "../data/models/"
+RAW_PATH = "./data/raw/"
+INTERIM_PATH = "./data/interim/"
+REFINED_PATH = "./data/refined/"
+EXTERNAL_PATH = "./data/external/"
+SUBMIT_PATH = "./data/submission/"
+MODELS_PATH = "./data/models/"
 
 
 CAL_DTYPES = {

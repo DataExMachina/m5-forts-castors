@@ -11,7 +11,7 @@ import tensorflow as tf
 
 import tensorflow.keras as tfk
 from tf_utils import train_mlp
-from conf import MODELS_PATH, SUBMIT_PATH, EXTERNAL_PATH,RAW_PATH, PRICE_DTYPES, CAL_DTYPES
+from conf import MODELS_PATH, SUBMIT_PATH, EXTERNAL_PATH, RAW_PATH, PRICE_DTYPES, CAL_DTYPES
 
 def train(horizon="validation", task="volume"):
 
