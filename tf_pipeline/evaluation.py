@@ -1,8 +1,8 @@
-'''
+"""
 EVALUATION FILE
 gathered on Kaggle
 
-'''
+"""
 import numpy as np
 import pandas as pd
 from typing import Union
@@ -12,7 +12,8 @@ import os
 
 import pickle
 from pprint import pprint
-with open('../data/models/best_params.pkl', 'rb') as f:
+
+with open("../data/models/best_params.pkl", "rb") as f:
     data = pickle.load(f)
 
 pprint(data)

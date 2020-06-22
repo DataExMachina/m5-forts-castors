@@ -1,8 +1,8 @@
 import logging
 import os
 
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # FATAL
-logging.getLogger('tensorflow').setLevel(logging.FATAL)
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"  # FATAL
+logging.getLogger("tensorflow").setLevel(logging.FATAL)
 from datetime import timedelta, datetime
 from tqdm import tqdm
 import fire
@@ -12,7 +12,9 @@ import tensorflow as tf
 import tensorflow.keras as tfk
 from tf_utils import train_mlp
 from conf import *
+
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
+
 
 def create_dt(horizon="validation", tr_last=1913):
     prices = pd.read_csv(os.path.join(RAW_PATH, "sell_prices.csv"), dtype=PRICE_DTYPES)
@@ -45,8 +47,8 @@ def create_dt(horizon="validation", tr_last=1913):
 
     increasing_term = dt.groupby(["dept_id", "store_id"])[numcols].sum()
     increasing_term = (
-                              increasing_term.T - increasing_term.T.shift(28)
-                      ) / increasing_term.T.shift(28)
+        increasing_term.T - increasing_term.T.shift(28)
+    ) / increasing_term.T.shift(28)
     increasing_term = increasing_term.reset_index(drop=True).iloc[-365:, :]
     rates = increasing_term[increasing_term.abs() < 1].mean() + 1
     rates = rates.reset_index().rename(columns={0: "rate"})
@@ -68,6 +70,7 @@ def create_dt(horizon="validation", tr_last=1913):
 
     return dt
 
+
 def train(horizon="validation", task="volume"):
 
     df = pd.read_parquet(
@@ -87,7 +90,6 @@ def train(horizon="validation", task="volume"):
     train_data = lgb.Dataset(
         X_train, label=y_train, categorical_feature=cat_feats, free_raw_data=False
     )
-
 
     params = {
         "metric": "rmse",
@@ -124,8 +126,8 @@ def create_fea(dt):
         for lag, lag_col in zip(lags, lag_cols):
             dt[f"rmean_{lag}_{win}"] = (
                 dt[["id", lag_col]]
-                    .groupby("id")[lag_col]
-                    .transform(lambda x: x.rolling(win).mean())
+                .groupby("id")[lag_col]
+                .transform(lambda x: x.rolling(win).mean())
             )
 
     date_features = {
@@ -162,13 +164,15 @@ def predict(horizon="validation", task="volume"):
     elif task != "volume":
         raise ValueError("Wrong value for task.")
 
-    mdl = tfk.models.load_model((os.path.join(MODELS_PATH, "%s_%s_tf.h5" % (horizon, task))))
+    mdl = tfk.models.load_model(
+        (os.path.join(MODELS_PATH, "%s_%s_tf.h5" % (horizon, task)))
+    )
 
     for i in tqdm(range(0, 28)):
         day = fday + timedelta(days=i)
         tst = dataframe[
             (dataframe.date >= day - timedelta(days=366)) & (dataframe.date <= day)
-            ].copy()
+        ].copy()
 
         tst = create_fea(tst)
         train_cols = tst.columns[~tst.columns.isin(useless_cols)]
@@ -177,18 +181,22 @@ def predict(horizon="validation", task="volume"):
 
         if task == "volume":
             predictions = mdl.predict(input_dict_predict, batch_size=10000)
-            dataframe.loc[dataframe.date == day, "sales"] = tst["rate"] * predictions.flatten()
+            dataframe.loc[dataframe.date == day, "sales"] = (
+                tst["rate"] * predictions.flatten()
+            )
 
         elif task == "share":
             #
-            ## not ready yet for deep learning 
+            ## not ready yet for deep learning
             #
-            dataframe.loc[te.date == day, "sales"] = mdl.predict(input_dict_predict, batch_size=10000)
+            dataframe.loc[te.date == day, "sales"] = mdl.predict(
+                input_dict_predict, batch_size=10000
+            )
             shares = (
                 dataframe.groupby(["dept_id", "store_id", "date"])["sales"]
-                    .sum()
-                    .reset_index()
-                    .rename(columns={"sales": "gp_sales"})
+                .sum()
+                .reset_index()
+                .rename(columns={"sales": "gp_sales"})
             )
             dataframe = dataframe.merge(shares, how="left")
             dataframe["sales"] = dataframe["sales"] / dt["gp_sales"]
@@ -213,8 +221,8 @@ def predict(horizon="validation", task="volume"):
     te_sub["F"] = [f"F{rank}" for rank in te_sub.groupby("id")["id"].cumcount() + 1]
     te_sub = (
         te_sub.set_index(["id", "F"])
-            .unstack()["sales"][[f"F{i}" for i in range(1, 29)]]
-            .reset_index()
+        .unstack()["sales"][[f"F{i}" for i in range(1, 29)]]
+        .reset_index()
     )
     te_sub.fillna(0.0, inplace=True)
 
@@ -235,8 +243,10 @@ def ml_pipeline(horizon="validation", task="volume", ml="predict"):
     elif ml == "predict":
         predict(horizon, task)
     else:
-        raise ValueError('ml arg must be "train_and_predict" or "predict" or "train_grid"')
+        raise ValueError(
+            'ml arg must be "train_and_predict" or "predict" or "train_grid"'
+        )
+
 
 if __name__ == "__main__":
     fire.Fire(ml_pipeline)
-

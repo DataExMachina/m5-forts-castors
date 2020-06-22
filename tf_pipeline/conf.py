@@ -29,24 +29,11 @@ PRICE_DTYPES = {
 
 ## features
 
-cat_feats = ['item_id',
-             'dept_id',
-             'store_id',
-             'cat_id',
-             'state_id'] + \
-            ["event_name_1",
-             "event_name_2",
-             "event_type_1",
-             "event_type_2"]
+cat_feats = ["item_id", "dept_id", "store_id", "cat_id", "state_id"] + [
+    "event_name_1",
+    "event_name_2",
+    "event_type_1",
+    "event_type_2",
+]
 
-useless_cols = ["id",
-                "date",
-                "sales",
-                "d",
-                "wm_yr_wk",
-                "weekday",
-                "rate"
-               ]
-
-
-
+useless_cols = ["id", "date", "sales", "d", "wm_yr_wk", "weekday", "rate"]

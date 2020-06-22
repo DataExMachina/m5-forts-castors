@@ -4,7 +4,8 @@ import gc
 import numpy as np, pandas as pd
 import lightgbm as lgb
 import fire
-from conf import * 
+from conf import *
+
 
 def create_dt(horizon="validation", tr_last=1913):
     prices = pd.read_csv(os.path.join(RAW_PATH, "sell_prices.csv"), dtype=PRICE_DTYPES)
