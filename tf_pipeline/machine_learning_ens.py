@@ -13,6 +13,7 @@ from conf import *
 from conf import MODELS_PATH, SUBMIT_PATH, EXTERNAL_PATH, RAW_PATH, PRICE_DTYPES, CAL_DTYPES
 from tf_utils import train_mlp
 from tqdm import tqdm
+import pickle 
 
 # silence tensorflow importing library
 logging.getLogger('tensorflow').setLevel(logging.FATAL)
@@ -178,9 +179,8 @@ def predict(horizon="validation", task="volume", ensembling_type='avg'):
 
     # gather both models
     print('>>>  load the two models ')
-    m_lgb = lgb.Booster(
-        model_file=os.path.join(MODELS_PATH, "%s_%s_lgb.txt" % (horizon, task))
-    )
+    m_lgb = pickle.load(open(os.path.join(MODELS_PATH, "%s_%s_lgb.pickle" % (horizon, task)), "rb" )) 
+    
     print('--- lgbm ok  ')
     m_tf = tfk.models.load_model((os.path.join(MODELS_PATH, "%s_%s_tf.h5" % (horizon, task))))
     print('--- tf ok  ')
