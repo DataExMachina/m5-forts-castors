@@ -247,7 +247,7 @@ def predict(horizon="validation", task="volume"):
         ]
         te_sub_validation = te_sub.copy()
         te_sub_validation["id"] = te_sub_validation["id"].str.replace(
-            "evaluation", "validatiobn"
+            "evaluation", "validation"
         )
         te_sub = pd.concat([te_sub, te_sub_validation])
 
