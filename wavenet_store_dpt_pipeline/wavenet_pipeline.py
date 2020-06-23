@@ -108,6 +108,12 @@ def pipeline(horizon="validation"):
 
     predict = pd.concat(submit, axis=1, ignore_index=True)
     predict.columns = sales_agg['key'].drop_duplicates().tolist()
+    predict = predict.T.reset_index()
+    predict.columns = ['key'] + ['F%s' % c for c in range(1, 29)]
+    predict['store_id'] = predict['key'].apply(lambda x: '_'.join(x.split('_')[:2]))
+    predict['dept_id'] = predict['key'].apply(lambda x: '_'.join(x.split('_')[2:]))
+    predict.drop('key', axis=1, inplace=True)
+    predict = predict[['store_id', 'dept_id'] + ['F%s' % c for c in range(1, 29)]]
     predict.to_csv('./data/external/forecast_wavenet_store_dpt_%s.csv' % horizon, index=False)
 
 if __name__ == "__main__":
