@@ -91,8 +91,8 @@ def create_dt(horizon="validation", tr_last=1913):
 
     increasing_term = dt.groupby(["dept_id", "store_id"])[numcols].sum()
     increasing_term = (
-                              increasing_term.T - increasing_term.T.shift(28)
-                      ) / increasing_term.T.shift(28)
+        increasing_term.T - increasing_term.T.shift(28)
+    ) / increasing_term.T.shift(28)
     increasing_term = increasing_term.reset_index(drop=True).iloc[-365:, :]
     rates = increasing_term[increasing_term.abs() < 1].mean() + 1
     rates = rates.reset_index().rename(columns={0: "rate"})
@@ -126,8 +126,8 @@ def create_fea(dt):
         for lag, lag_col in zip(lags, lag_cols):
             dt[f"rmean_{lag}_{win}"] = (
                 dt[["id", lag_col]]
-                    .groupby("id")[lag_col]
-                    .transform(lambda x: x.rolling(win).mean())
+                .groupby("id")[lag_col]
+                .transform(lambda x: x.rolling(win).mean())
             )
 
     date_features = {
@@ -150,9 +150,9 @@ def create_fea(dt):
 def compute_share(dt):
     shares = (
         dt.groupby(["dept_id", "store_id", "date"])["sales"]
-            .sum()
-            .reset_index()
-            .rename(columns={"sales": "gp_sales"})
+        .sum()
+        .reset_index()
+        .rename(columns={"sales": "gp_sales"})
     )
     dt = dt.merge(shares, how="left")
     dt["sales"] = dt["sales"] / dt["gp_sales"]
@@ -169,14 +169,7 @@ def predict(horizon="validation", task="volume", ensembling_type='avg'):
     else:
         raise ValueError("Wrong value for horizon arg.")
 
-    dataframe = create_dt(horizon, tr_last)
-
-    if task == "share":
-        dataframe = compute_share(dataframe)
-    elif task != "volume":
-        raise ValueError("Wrong value for task.")
-
-    # gather both models
+    # gather both models (before data to avoid memory spikes )
     print('>>>  load the two models ')
     m_lgb = lgb.Booster(
         model_file=os.path.join(MODELS_PATH, "%s_%s_lgb.txt" % (horizon, task))
@@ -185,6 +178,15 @@ def predict(horizon="validation", task="volume", ensembling_type='avg'):
     m_tf = tfk.models.load_model((os.path.join(MODELS_PATH, "%s_%s_tf.h5" % (horizon, task))))
     print('--- tf ok  ')
     print('>>> start to make predictions ')
+
+
+    dataframe = create_dt(horizon, tr_last)
+
+    if task == "share":
+        dataframe = compute_share(dataframe)
+    elif task != "volume":
+        raise ValueError("Wrong value for task.")
+
     for i in tqdm(range(0, 28)):
         day = fday + timedelta(days=i)
         tst = dataframe[

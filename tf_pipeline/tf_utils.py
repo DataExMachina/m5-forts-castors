@@ -121,8 +121,6 @@ def create_mlp(layers_list=None, emb_dim=30, loss_fn='poisson', learning_rate=1e
     output_cat = []
     output_num = []
 
-    # sequencial inputs
-
     # numerical data part
     if len(num_feats) > 1:
         for num_var in num_feats:
@@ -195,7 +193,7 @@ def train_mlp(horizon="validation",task='volume', training_params=None):
     df = pd.read_parquet(
         os.path.join(REFINED_PATH, "%s_%s_fe.parquet" % (horizon, task))
     )
-    df[cat_feats].fillna(-1, inplace=True)
+    # df[cat_feats].fillna(-1, inplace=True)
     df.dropna(inplace=True)
 
     num_feats = df.columns[~df.columns.isin(useless_cols + cat_feats)].to_list()
@@ -203,9 +201,15 @@ def train_mlp(horizon="validation",task='volume', training_params=None):
     with open(MODELS_PATH + 'best_params.pkl', 'rb') as f:
         params = pickle.load(f)
 
-    mdl = create_mlp(layers_list=params['layers_list'], emb_dim=params['emb_dim'], loss_fn=params['loss_fn'], learning_rate=params['learning_rate'],
-                       optimizer=tfk.optimizers.Adam, cat_feats=cat_feats, num_feats=num_feats,
-                       cardinality=params['cardinality'], verbose=0)
+    mdl = create_mlp(layers_list=[512, 512, 256, 256,256,128], #,params['layers_list'],
+                     emb_dim=30, #params['emb_dim'],
+                     loss_fn='tweedie', # params['loss_fn'],
+                     learning_rate=params['learning_rate'],
+                     optimizer=tfk.optimizers.Adam,
+                     cat_feats=cat_feats,
+                     num_feats=num_feats,
+                     cardinality=params['cardinality'],
+                     verbose=0)
     try:
         tfk.utils.plot_model(mdl, show_shapes=True)
     except:
