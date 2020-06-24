@@ -228,7 +228,7 @@ def fitness(learning_rate,
                             epochs=num_epoch,
                             shuffle=True,
                             sample_weight=weights_train.values,
-                            callbacks=[model_save, early_stopping],
+                            #callbacks=[model_save, early_stopping],
                             verbose=2,
                             )
 
@@ -239,7 +239,7 @@ def fitness(learning_rate,
                             batch_size=batch_size,
                             epochs=num_epoch,
                             shuffle=True,
-                            callbacks=[model_save, early_stopping],
+                            #callbacks=[model_save, early_stopping],
                             verbose=2,
                             )
 

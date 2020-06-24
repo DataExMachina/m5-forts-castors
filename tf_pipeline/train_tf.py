@@ -15,9 +15,6 @@ import tensorflow as tf
 import tensorflow.keras as tfk
 from pprint import pprint 
 
-print('start grid search')
-horizon="validation"
-task="volume"
 
 CAL_DTYPES={"event_name_1": "category",
             "event_name_2": "category",
@@ -45,8 +42,11 @@ cat_feats = ['item_id',
              "event_type_1",
              "event_type_2"]
 
-useless_cols = ["id", "date", "sales","d", "wm_yr_wk", "weekday"]
 
+horizon="validation"
+task="volume"
+
+useless_cols = ["id", "date", "sales","d", "wm_yr_wk", "weekday"]
 h = 28 
 max_lags = 57
 tr_last = 1913
@@ -144,7 +144,7 @@ res = load((os.path.join(MODELS_PATH, "%s_%s_checkpoint.pkl" % (horizon, task)))
 x0 = res.x_iters
 y0 = res.func_vals
 
-best_params = x0[np.argmax(y0)]
+best_params = x0[np.argmin(y0)]
 
 learning_rate = best_params[0]
 num_epoch = best_params[1]
@@ -180,6 +180,7 @@ input_dict = {f"input_{col}": X_train[col] for col in X_train.columns}
 del df,X_train
 gc.collect()
 
+list_layer = [num_dense_nodes // (2 ** x) for x in range(num_dense_layers)]
 model = create_mlp(layers_list=list_layer, emb_dim=emb_dim, loss_fn=loss_fn, learning_rate=learning_rate,
                    optimizer=tfk.optimizers.Adam, cat_feats=cat_feats, num_feats=num_feats,
                    cardinality=cardinality, verbose=0)
@@ -187,7 +188,7 @@ model = create_mlp(layers_list=list_layer, emb_dim=emb_dim, loss_fn=loss_fn, lea
 
 
 model_save = tfk.callbacks.ModelCheckpoint('model_checkpoints', verbose=0)
-early_stopping = tfk.callbacks.EarlyStopping('val_root_mean_squared_error',
+early_stopping = tfk.callbacks.EarlyStopping('root_mean_squared_error',
                                              patience=15,
                                              verbose=0,
                                              restore_best_weights=True)
@@ -195,7 +196,6 @@ early_stopping = tfk.callbacks.EarlyStopping('val_root_mean_squared_error',
 if do_weigth:
     history = model.fit(input_dict,
                         y_train.values,
-                        validation_data=(input_dict_test, y_test.values),
                         batch_size=batch_size,
                         epochs=num_epoch,
                         shuffle=True,
@@ -207,7 +207,6 @@ if do_weigth:
 else:
     history = model.fit(input_dict,
                         y_train.values,
-                        validation_data=(input_dict_test, y_test.values),
                         batch_size=batch_size,
                         epochs=num_epoch,
                         shuffle=True,
