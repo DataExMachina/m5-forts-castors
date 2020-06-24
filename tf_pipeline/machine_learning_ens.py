@@ -1,8 +1,7 @@
 import logging
 import os
-
-os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"  # FATAL
-logging.getLogger("tensorflow").setLevel(logging.FATAL)
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # FATAL
+logging.getLogger('tensorflow').setLevel(logging.FATAL)
 
 from datetime import datetime, timedelta
 import fire
@@ -11,20 +10,12 @@ import numpy as np
 import pandas as pd
 import tensorflow.keras as tfk
 from conf import *
-from conf import (
-    MODELS_PATH,
-    SUBMIT_PATH,
-    EXTERNAL_PATH,
-    RAW_PATH,
-    PRICE_DTYPES,
-    CAL_DTYPES,
-)
+from conf import MODELS_PATH, SUBMIT_PATH, EXTERNAL_PATH, RAW_PATH, PRICE_DTYPES, CAL_DTYPES
 from tf_utils import train_mlp
 from tqdm import tqdm
-import pickle
 
 # silence tensorflow importing library
-logging.getLogger("tensorflow").setLevel(logging.FATAL)
+logging.getLogger('tensorflow').setLevel(logging.FATAL)
 
 
 def train(horizon="validation", task="volume"):
@@ -168,8 +159,7 @@ def compute_share(dt):
     dt.drop(["gp_sales"], axis=1, inplace=True)
     return dt
 
-
-def predict(horizon="validation", task="volume", ensembling_type="avg"):
+def predict(horizon="validation", task="volume", ensembling_type='avg'):
     if horizon == "validation":
         tr_last = 1913
         fday = datetime(2016, 4, 25)
@@ -179,6 +169,17 @@ def predict(horizon="validation", task="volume", ensembling_type="avg"):
     else:
         raise ValueError("Wrong value for horizon arg.")
 
+    # gather both models (before data to avoid memory spikes )
+    print('>>>  load the two models ')
+    m_lgb = lgb.Booster(
+        model_file=os.path.join(MODELS_PATH, "%s_%s_lgb.txt" % (horizon, task))
+    )
+    print('--- lgbm ok  ')
+    m_tf = tfk.models.load_model((os.path.join(MODELS_PATH, "%s_%s_tf.h5" % (horizon, task))))
+    print('--- tf ok  ')
+    print('>>> start to make predictions ')
+
+
     dataframe = create_dt(horizon, tr_last)
 
     if task == "share":
@@ -186,23 +187,11 @@ def predict(horizon="validation", task="volume", ensembling_type="avg"):
     elif task != "volume":
         raise ValueError("Wrong value for task.")
 
-    # gather both models
-    print(">>>  load the two models ")
-    m_lgb = pickle.load(
-        open(os.path.join(MODELS_PATH, "%s_%s_lgb.pickle" % (horizon, task)), "rb")
-    )
-
-    print("--- lgbm ok  ")
-    m_tf = tfk.models.load_model(
-        (os.path.join(MODELS_PATH, "%s_%s_tf.h5" % (horizon, task)))
-    )
-    print("--- tf ok  ")
-    print(">>> start to make predictions ")
     for i in tqdm(range(0, 28)):
         day = fday + timedelta(days=i)
         tst = dataframe[
             (dataframe.date >= day - timedelta(days=366)) & (dataframe.date <= day)
-        ].copy()
+            ].copy()
 
         tst = create_fea(tst)
         train_cols = tst.columns[~tst.columns.isin(useless_cols)]
@@ -210,15 +199,9 @@ def predict(horizon="validation", task="volume", ensembling_type="avg"):
 
         if task == "volume":
             input_dict_predict = {f"input_{col}": tst[col] for col in train_cols}
-            if ensembling_type == "avg":
-                predictions = (
-                    tst["rate"]
-                    * (
-                        m_lgb.predict(tst[train_cols])
-                        + m_tf.predict(input_dict_predict, batch_size=10000).flatten()
-                    )
-                    / 2
-                )
+            if ensembling_type == 'avg':
+                predictions = tst["rate"] * (m_lgb.predict(tst[train_cols]) + m_tf.predict(input_dict_predict,
+                                                                                           batch_size=10000).flatten()) / 2
             dataframe.loc[dataframe.date == day, "sales"] = predictions
         elif task == "share":
             dataframe.loc[dataframe.date == day, "sales"] = m_lgb.predict(
@@ -226,9 +209,9 @@ def predict(horizon="validation", task="volume", ensembling_type="avg"):
             )
             shares = (
                 dataframe.groupby(["dept_id", "store_id", "date"])["sales"]
-                .sum()
-                .reset_index()
-                .rename(columns={"sales": "gp_sales"})
+                    .sum()
+                    .reset_index()
+                    .rename(columns={"sales": "gp_sales"})
             )
             dataframe = dataframe.merge(shares, how="left")
             dataframe["sales"] = dataframe["sales"] / dataframe["gp_sales"]
@@ -252,8 +235,8 @@ def predict(horizon="validation", task="volume", ensembling_type="avg"):
     te_sub["F"] = [f"F{rank}" for rank in te_sub.groupby("id")["id"].cumcount() + 1]
     te_sub = (
         te_sub.set_index(["id", "F"])
-        .unstack()["sales"][[f"F{i}" for i in range(1, 29)]]
-        .reset_index()
+            .unstack()["sales"][[f"F{i}" for i in range(1, 29)]]
+            .reset_index()
     )
     te_sub.fillna(0.0, inplace=True)
 
@@ -266,7 +249,6 @@ def predict(horizon="validation", task="volume", ensembling_type="avg"):
             os.path.join(EXTERNAL_PATH, "ens_weights_%s.csv" % horizon), index=False
         )
 
-
 def ml_pipeline(horizon="validation", task="volume", ml="predict"):
     if ml == "train_and_predict":
         train(horizon, task)
@@ -276,7 +258,6 @@ def ml_pipeline(horizon="validation", task="volume", ml="predict"):
         predict(horizon, task)
     else:
         raise ValueError('ml arg must be "train_and_predict" or "predict"')
-
 
 if __name__ == "__main__":
     fire.Fire(ml_pipeline)

@@ -1,8 +1,16 @@
+<<<<<<< HEAD
 """
 EVALUATION FILE
 gathered on Kaggle
 
 """
+=======
+'''
+EVALUATION FILE
+gathered on Kaggle
+
+'''
+>>>>>>> parent of e6adfb9... nouveau pipeline
 import numpy as np
 import pandas as pd
 from typing import Union
@@ -12,8 +20,12 @@ import os
 
 import pickle
 from pprint import pprint
+<<<<<<< HEAD
 
 with open("../data/models/best_params.pkl", "rb") as f:
+=======
+with open('../data/models/best_params.pkl', 'rb') as f:
+>>>>>>> parent of e6adfb9... nouveau pipeline
     data = pickle.load(f)
 
 pprint(data)
@@ -123,4 +135,8 @@ pprint(data)
 #
 # evaluator = WRMSSEEvaluator(df_train, df_valid, df_calendar, df_prices)
 # path_predictions = os.path.join(SUBMIT_PATH, "tf_estim_%s.csv" % horizon)
+<<<<<<< HEAD
 # df = pd.read_csv(path_predictions)
+=======
+# df = pd.read_csv(path_predictions)
+>>>>>>> parent of e6adfb9... nouveau pipeline
