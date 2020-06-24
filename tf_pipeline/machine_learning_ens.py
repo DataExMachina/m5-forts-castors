@@ -194,7 +194,7 @@ def predict(horizon="validation", task="volume", ensembling_type="avg"):
 
     print("--- lgbm ok  ")
     m_tf = tfk.models.load_model(
-        (os.path.join(MODELS_PATH, "%s_%s_tf.h5" % (horizon, task)))
+        (os.path.join(MODELS_PATH, "%s_%s_best_tf.h5" % (horizon, task)))
     )
     print("--- tf ok  ")
     print(">>> start to make predictions ")
@@ -215,7 +215,7 @@ def predict(horizon="validation", task="volume", ensembling_type="avg"):
                     tst["rate"]
                     * (
                         m_lgb.predict(tst[train_cols])
-                        + m_tf.predict(input_dict_predict, batch_size=10000).flatten()
+                        + m_tf.predict(input_dict_predict, batch_size=10000).ravel()
                     )
                     / 2
                 )
