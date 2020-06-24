@@ -224,6 +224,7 @@ def train_mlp(horizon="validation", task="volume", training_params=None):
     with open(MODELS_PATH + "best_params.pkl", "rb") as f:
         params = pickle.load(f)
 
+<<<<<<< HEAD
     mdl = create_mlp(
         layers_list=params["layers_list"],
         emb_dim=params["emb_dim"],
@@ -235,6 +236,11 @@ def train_mlp(horizon="validation", task="volume", training_params=None):
         cardinality=params["cardinality"],
         verbose=0,
     )
+=======
+    mdl = create_mlp(layers_list=params['layers_list'], emb_dim=params['emb_dim'], loss_fn=params['loss_fn'], learning_rate=params['learning_rate'],
+                       optimizer=tfk.optimizers.Adam, cat_feats=cat_feats, num_feats=num_feats,
+                       cardinality=params['cardinality'], verbose=0)
+>>>>>>> parent of e6adfb9... nouveau pipeline
     try:
         tfk.utils.plot_model(mdl, show_shapes=True)
     except:

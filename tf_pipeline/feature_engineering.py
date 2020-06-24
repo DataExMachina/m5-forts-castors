@@ -4,9 +4,7 @@ import gc
 import numpy as np, pandas as pd
 import lightgbm as lgb
 import fire
-
-INTERIM_PATH = "data/interim/"
-REFINED_PATH = "data/refined/"
+from .conf import *
 
 
 def create_fea(dt):
