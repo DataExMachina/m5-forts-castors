@@ -8,7 +8,8 @@ SUBMIT_PATH = "./data/submission/"
 from skopt.plots import plot_objective
 
 horizon = 'validation'
-your_submission_path = os.path.join(SUBMIT_PATH, "lgb_estim_%s.csv" % horizon)
+your_submission_path = os.path.join(SUBMIT_PATH, "tf_estim_%s.csv" % horizon)
+
 
 ## from https://www.kaggle.com/c/m5-forecasting-accuracy/discussion/133834 and edited to get scores at all levels
 class WRMSSEEvaluator(object):
@@ -118,97 +119,97 @@ evaluator = WRMSSEEvaluator(df_train, df_valid, df_calendar, df_prices)
 preds_valid = df_valid.copy() + np.random.randint(100, size = df_valid.shape)
 preds_valid.head()
 
-# ## evaluating your submission
-# preds_valid = pd.read_csv(your_submission_path)
-# preds_valid = preds_valid[preds_valid.id.str.contains("validation")]
-# preds_valid = preds_valid.merge(df_sample_submission[["id", "order"]], on = "id").sort_values("order").drop(["id", "order"], axis = 1).reset_index(drop = True)
-# preds_valid.rename(columns = {
-#     "F1": "d_1914", "F2": "d_1915", "F3": "d_1916", "F4": "d_1917", "F5": "d_1918", "F6": "d_1919", "F7": "d_1920",
-#     "F8": "d_1921", "F9": "d_1922", "F10": "d_1923", "F11": "d_1924", "F12": "d_1925", "F13": "d_1926", "F14": "d_1927",
-#     "F15": "d_1928", "F16": "d_1929", "F17": "d_1930", "F18": "d_1931", "F19": "d_1932", "F20": "d_1933", "F21": "d_1934",
-#     "F22": "d_1935", "F23": "d_1936", "F24": "d_1937", "F25": "d_1938", "F26": "d_1939", "F27": "d_1940", "F28": "d_1941"
-# }, inplace = True)
+## evaluating your submission
+preds_valid = pd.read_csv(your_submission_path)
+preds_valid = preds_valid[preds_valid.id.str.contains("validation")]
+preds_valid = preds_valid.merge(df_sample_submission[["id", "order"]], on = "id").sort_values("order").drop(["id", "order"], axis = 1).reset_index(drop = True)
+preds_valid.rename(columns = {
+    "F1": "d_1914", "F2": "d_1915", "F3": "d_1916", "F4": "d_1917", "F5": "d_1918", "F6": "d_1919", "F7": "d_1920",
+    "F8": "d_1921", "F9": "d_1922", "F10": "d_1923", "F11": "d_1924", "F12": "d_1925", "F13": "d_1926", "F14": "d_1927",
+    "F15": "d_1928", "F16": "d_1929", "F17": "d_1930", "F18": "d_1931", "F19": "d_1932", "F20": "d_1933", "F21": "d_1934",
+    "F22": "d_1935", "F23": "d_1936", "F24": "d_1937", "F25": "d_1938", "F26": "d_1939", "F27": "d_1940", "F28": "d_1941"
+}, inplace = True)
 
-# groups, scores = evaluator.score(preds_valid)
-#
-# score_public_lb = np.mean(scores)
-#
-# for i in range(len(groups)):
-#     print(f"Score for group {groups[i]}: {round(scores[i], 5)}")
-# print(f"\nPublic LB Score: {round(score_public_lb, 5)}")
+groups, scores = evaluator.score(preds_valid)
+
+score_public_lb = np.mean(scores)
+
+for i in range(len(groups)):
+    print(f"Score for group {groups[i]}: {round(scores[i], 5)}")
+print(f"\nPublic LB Score: {round(score_public_lb, 5)}")
 
 ### make an optimized weighted ensembling
-import glob
-from skopt import gp_minimize
-from skopt.utils import use_named_args
-from skopt.space import Real, Categorical, Integer
+# import glob
+# from skopt import gp_minimize
+# from skopt.utils import use_named_args
+# from skopt.space import Real, Categorical, Integer
 
 
-list_sub= [SUBMIT_PATH +"ens_estim_validation.csv",
-           SUBMIT_PATH +"tf_estim_validation.csv",
-           SUBMIT_PATH +"lgb_estim_validation.csv",
-           SUBMIT_PATH +"Prophet_store_dpt_lgb_weights_validation.csv",
-           ]
-sub_list = []
-dimensions = []
-print(list_sub)
-names = ['ens_estim_validation','tf_estim_validation','lgb_estim_validation','Prophet_store_dpt_lgb_weights_validation']
-i=0
+# list_sub= [SUBMIT_PATH +"ens_estim_validation.csv",
+#            SUBMIT_PATH +"tf_estim_validation.csv",
+#            SUBMIT_PATH +"lgb_estim_validation.csv",
+#            SUBMIT_PATH +"Prophet_store_dpt_lgb_weights_validation.csv",
+#            ]
+# sub_list = []
+# dimensions = []
+# print(list_sub)
+# names = ['ens_estim_validation','tf_estim_validation','lgb_estim_validation','Prophet_store_dpt_lgb_weights_validation']
+# i=0
 
-for sub in tqdm(list_sub,total=len(list_sub)):
-    preds_valid = pd.read_csv(sub)
-    preds_valid = preds_valid[preds_valid.id.str.contains("validation")]
-    preds_valid = preds_valid.merge(df_sample_submission[["id", "order"]], on="id").sort_values("order").drop(
-        ["id", "order"], axis=1).reset_index(drop=True)
-    preds_valid.rename(columns={
-        "F1": "d_1914", "F2": "d_1915", "F3": "d_1916", "F4": "d_1917", "F5": "d_1918", "F6": "d_1919", "F7": "d_1920",
-        "F8": "d_1921", "F9": "d_1922", "F10": "d_1923", "F11": "d_1924", "F12": "d_1925", "F13": "d_1926",
-        "F14": "d_1927",
-        "F15": "d_1928", "F16": "d_1929", "F17": "d_1930", "F18": "d_1931", "F19": "d_1932", "F20": "d_1933",
-        "F21": "d_1934",
-        "F22": "d_1935", "F23": "d_1936", "F24": "d_1937", "F25": "d_1938", "F26": "d_1939", "F27": "d_1940",
-        "F28": "d_1941"
-    }, inplace=True)
-    sub_list.append(preds_valid.values)
-    dimensions.append((Real(low=0, high=2.5, name=names[i])))
-    i+=1
+# for sub in tqdm(list_sub,total=len(list_sub)):
+#     preds_valid = pd.read_csv(sub)
+#     preds_valid = preds_valid[preds_valid.id.str.contains("validation")]
+#     preds_valid = preds_valid.merge(df_sample_submission[["id", "order"]], on="id").sort_values("order").drop(
+#         ["id", "order"], axis=1).reset_index(drop=True)
+#     preds_valid.rename(columns={
+#         "F1": "d_1914", "F2": "d_1915", "F3": "d_1916", "F4": "d_1917", "F5": "d_1918", "F6": "d_1919", "F7": "d_1920",
+#         "F8": "d_1921", "F9": "d_1922", "F10": "d_1923", "F11": "d_1924", "F12": "d_1925", "F13": "d_1926",
+#         "F14": "d_1927",
+#         "F15": "d_1928", "F16": "d_1929", "F17": "d_1930", "F18": "d_1931", "F19": "d_1932", "F20": "d_1933",
+#         "F21": "d_1934",
+#         "F22": "d_1935", "F23": "d_1936", "F24": "d_1937", "F25": "d_1938", "F26": "d_1939", "F27": "d_1940",
+#         "F28": "d_1941"
+#     }, inplace=True)
+#     sub_list.append(preds_valid.values)
+#     dimensions.append((Real(low=-0.1, high=5, name=names[i])))
+#     i+=1
 
-@use_named_args(dimensions=dimensions)
-def fitness(ens_estim_validation,
-            tf_estim_validation,
-            lgb_estim_validation,
-            Prophet_store_dpt_lgb_weights_validation):
-    func_list = [ens_estim_validation,tf_estim_validation,lgb_estim_validation,Prophet_store_dpt_lgb_weights_validation]
-    preds_valid_copy = preds_valid.copy()
-    results = [sub*func_lst_coef for sub,func_lst_coef in zip(sub_list,func_list)]
-    preds_valid_copy.loc[:,:] = sum(results)/len(func_list)
-    groups, scores = evaluator.score(preds_valid_copy)
-    return np.mean(scores)
+# @use_named_args(dimensions=dimensions)
+# def fitness(ens_estim_validation,
+#             tf_estim_validation,
+#             lgb_estim_validation,
+#             Prophet_store_dpt_lgb_weights_validation):
+#     func_list = [ens_estim_validation,tf_estim_validation,lgb_estim_validation,Prophet_store_dpt_lgb_weights_validation]
+#     preds_valid_copy = preds_valid.copy()
+#     results = [sub*func_lst_coef for sub,func_lst_coef in zip(sub_list,func_list)]
+#     preds_valid_copy.loc[:,:] = sum(results)/len(func_list)
+#     groups, scores = evaluator.score(preds_valid_copy)
+#     return np.mean(scores)
 
-def fitness_validation(ens_estim_validation,
-            tf_estim_validation,
-            lgb_estim_validation,
-            Prophet_store_dpt_lgb_weights_validation):
-    func_list = [ens_estim_validation,tf_estim_validation,lgb_estim_validation,Prophet_store_dpt_lgb_weights_validation]
-    preds_valid_copy = preds_valid.copy()
-    results = [sub*func_lst_coef for sub,func_lst_coef in zip(sub_list,func_list)]
-    preds_valid_copy.loc[:,:] = sum(results)/len(func_list)
-    groups, scores = evaluator.score(preds_valid_copy)
-    score_public_lb = np.mean(scores)
+# def fitness_validation(ens_estim_validation,
+#             tf_estim_validation,
+#             lgb_estim_validation,
+#             Prophet_store_dpt_lgb_weights_validation):
+#     func_list = [ens_estim_validation,tf_estim_validation,lgb_estim_validation,Prophet_store_dpt_lgb_weights_validation]
+#     preds_valid_copy = preds_valid.copy()
+#     results = [sub*func_lst_coef for sub,func_lst_coef in zip(sub_list,func_list)]
+#     preds_valid_copy.loc[:,:] = sum(results)/len(func_list)
+#     groups, scores = evaluator.score(preds_valid_copy)
+#     score_public_lb = np.mean(scores)
 
-    for i in range(len(groups)):
-        print(f"Score for group {groups[i]}: {round(scores[i], 5)}")
-    print(f"\nPublic LB Score: {round(score_public_lb, 5)}")
+#     for i in range(len(groups)):
+#         print(f"Score for group {groups[i]}: {round(scores[i], 5)}")
+#     print(f"\nPublic LB Score: {round(score_public_lb, 5)}")
 
-gp_result = gp_minimize(func=fitness,
-                            dimensions=dimensions,
-                            acq_func='EI',
-                            n_calls=200,
-                            verbose=1,
-                            )
+# gp_result = gp_minimize(func=fitness,
+#                             dimensions=dimensions,
+#                             acq_func='EI',
+#                             n_calls=200,
+#                             verbose=1,
+#                             )
 
 
-print(f"Best value found : {gp_result.fun}")
-from skopt.plots import plot_objective
-_ = plot_objective(gp_result)
-fitness_validation(*gp_result.x_iters[np.argmin(gp_result.func_vals)])
+# print(f"Best value found : {gp_result.fun}")
+# from skopt.plots import plot_objective
+# _ = plot_objective(gp_result)
+# fitness_validation(*gp_result.x_iters[np.argmin(gp_result.func_vals)])

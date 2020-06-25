@@ -118,7 +118,7 @@ def predict(horizon="validation", task="volume"):
     elif task != "volume":
         raise ValueError("Wrong value for task.")
 
-    mdl = tfk.models.load_model((os.path.join(MODELS_PATH, "%s_%s_tf_stock.h5" % (horizon, task))))
+    mdl = tfk.models.load_model((os.path.join(MODELS_PATH, "%s_%s_tf.h5" % (horizon, task))))
 
     for i in tqdm(range(0, 28)):
         day = fday + timedelta(days=i)

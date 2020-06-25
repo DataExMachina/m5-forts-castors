@@ -11,6 +11,7 @@ from conf import cat_feats, REFINED_PATH, useless_cols, MODELS_PATH
 tfkl = tfk.layers
 K = tfk.backend
 np.random.seed(42)
+
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 
 ## evaluation metric
@@ -152,9 +153,9 @@ def create_mlp(layers_list=None, emb_dim=30, loss_fn='poisson', learning_rate=1e
         inputs.append(input_cat)
         embedding = tfkl.Embedding(vocab,
                                    embedding_size,
-                                   embeddings_regularizer=tf.keras.regularizers.l1(1e-8),
+                                   embeddings_regularizer=tf.keras.regularizers.l2(1e-8),
                                    name='embedding_{0}'.format(categorical_var))(input_cat)
-        embedding = tfkl.Dropout(0.15)(embedding)
+        embedding = tfkl.SpatialDropout1D(0.15)(embedding)
         vec = tfkl.Flatten(name='flatten_{0}'.format(
             categorical_var))(embedding)
         output_cat.append(vec)
@@ -165,13 +166,13 @@ def create_mlp(layers_list=None, emb_dim=30, loss_fn='poisson', learning_rate=1e
 
     # dense network
     for i in range(len(layers_list)):
+        dense = tfkl.BatchNormalization()(dense)
         dense = tfkl.Dense(layers_list[i],
                            name='Dense_{0}'.format(str(i)),
                            activation='elu')(dense)
         dense = tfkl.Dropout(.15)(dense)
-        dense = tfkl.BatchNormalization()(dense)
 
-    dense2 = tfkl.Dense(1, name='Output', activation='elu')(dense)
+    dense2 = tfkl.Dense(1, name='Output', activation='softplus')(dense)
     model = tfk.Model(inputs, dense2)
 
     opt = optimizer(learning_rate)

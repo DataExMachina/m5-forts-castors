@@ -140,20 +140,26 @@ def fitness(learning_rate,
 
     return
 
+
 res = load((os.path.join(MODELS_PATH, "%s_%s_checkpoint.pkl" % (horizon, task))))
 x0 = res.x_iters
 y0 = res.func_vals
 
-best_params = x0[np.argmin(y0)]
+pprint(y0)
+pprint(x0)
+
+best_params = x0[7]
 
 learning_rate = best_params[0]
 num_epoch = best_params[1]
 num_dense_layers = best_params[2]
-num_dense_nodes = best_params[3]
-batch_size = best_params[4]
-emb_dim = best_params[5]
+num_dense_nodes =  best_params[3]
+emb_dim = best_params[4]
+batch_size = best_params[5]
 loss_fn = best_params[6]
 do_weigth = best_params[7]
+
+
 
 FIRST_DAY = 1 # If you want to load all the data set it to '1' -->  Great  memory overflow  risk !
 df = create_dt(is_train=True, first_day= FIRST_DAY)
@@ -185,14 +191,13 @@ model = create_mlp(layers_list=list_layer, emb_dim=emb_dim, loss_fn=loss_fn, lea
                    optimizer=tfk.optimizers.Adam, cat_feats=cat_feats, num_feats=num_feats,
                    cardinality=cardinality, verbose=0)
 
-
-
 model_save = tfk.callbacks.ModelCheckpoint('model_checkpoints', verbose=0)
 early_stopping = tfk.callbacks.EarlyStopping('root_mean_squared_error',
                                              patience=15,
                                              verbose=0,
                                              restore_best_weights=True)
 
+print("start training")
 if do_weigth:
     history = model.fit(input_dict,
                         y_train.values,
@@ -201,7 +206,7 @@ if do_weigth:
                         shuffle=True,
                         sample_weight=weights_train.values,
                         callbacks=[model_save, early_stopping],
-                        verbose=2,
+                        verbose=1,
                         )
 
 else:
@@ -211,7 +216,7 @@ else:
                         epochs=num_epoch,
                         shuffle=True,
                         callbacks=[model_save, early_stopping],
-                        verbose=2,
+                        verbose=1,
                         )
 
 model.save((os.path.join(MODELS_PATH, "%s_%s_full_best_tf.h5" % (horizon, task))))
