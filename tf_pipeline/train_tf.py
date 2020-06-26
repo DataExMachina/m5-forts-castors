@@ -151,7 +151,7 @@ pprint(x0)
 best_params = x0[7]
 
 learning_rate = best_params[0]
-num_epoch = best_params[1]
+num_epoch = 50#best_params[1]
 num_dense_layers = best_params[2]
 num_dense_nodes =  best_params[3]
 emb_dim = best_params[4]
