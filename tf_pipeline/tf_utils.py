@@ -11,6 +11,7 @@ from conf import cat_feats, REFINED_PATH, useless_cols, MODELS_PATH
 tfkl = tfk.layers
 K = tfk.backend
 np.random.seed(42)
+
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 
 ## evaluation metric
@@ -152,9 +153,9 @@ def create_mlp(layers_list=None, emb_dim=30, loss_fn='poisson', learning_rate=1e
         inputs.append(input_cat)
         embedding = tfkl.Embedding(vocab,
                                    embedding_size,
-                                   embeddings_regularizer=tf.keras.regularizers.l1(1e-8),
+                                   embeddings_regularizer=tf.keras.regularizers.l2(1e-8),
                                    name='embedding_{0}'.format(categorical_var))(input_cat)
-        embedding = tfkl.Dropout(0.15)(embedding)
+        embedding = tfkl.Dropout(0.15)(embedding) # best worked with Dropout()
         vec = tfkl.Flatten(name='flatten_{0}'.format(
             categorical_var))(embedding)
         output_cat.append(vec)
@@ -165,13 +166,13 @@ def create_mlp(layers_list=None, emb_dim=30, loss_fn='poisson', learning_rate=1e
 
     # dense network
     for i in range(len(layers_list)):
+        dense = tfkl.BatchNormalization()(dense) # change the way batchnorm is done 
         dense = tfkl.Dense(layers_list[i],
                            name='Dense_{0}'.format(str(i)),
                            activation='elu')(dense)
         dense = tfkl.Dropout(.15)(dense)
-        dense = tfkl.BatchNormalization()(dense)
 
-    dense2 = tfkl.Dense(1, name='Output', activation='elu')(dense)
+    dense2 = tfkl.Dense(1, name='Output', activation='softplus')(dense) # initatialy elu
     model = tfk.Model(inputs, dense2)
 
     opt = optimizer(learning_rate)
@@ -186,6 +187,91 @@ def create_mlp(layers_list=None, emb_dim=30, loss_fn='poisson', learning_rate=1e
     else:
         raise ValueError(
             "Loss function should be either Poisson or tweedie for now")
+    return model
+
+
+    # function to generate the MLP
+def create_mlp_softmax(layers_list=None,
+						output_count  = None, 
+					    emb_dim=5,
+					     learning_rate=1e-3,
+					      optimizer=tfk.optimizers.Adam,
+               			  cat_feats=None,
+               			 num_feats=None,
+               			  cardinality=None,
+               			   verbose=0):
+
+
+    # define our MLP network
+    if cardinality is None:
+        cardinality = []
+    if num_feats is None:
+        num_feats = []
+    if layers_list is None:
+        layers_list = [16,16,16]
+
+    inputs = []
+    output_cat = []
+    output_num = []
+
+    # numerical data part
+    if len(num_feats) > 1:
+        for num_var in num_feats:
+            input_num = tfkl.Input(
+                shape=(1,), name='input_{0}'.format(num_var))
+            inputs.append(input_num)
+            output_num.append(input_num)
+        output_num = tfkl.Concatenate(name='concatenate_num')(output_num)
+        output_num = tfkl.BatchNormalization()(output_num)  # to avoid preprocessing
+
+    else:
+        input_num = tfkl.Input(
+            shape=(1,), name='input_{0}'.format(num_feats[0]))
+        inputs.append(input_num)
+        output_num = input_num
+
+    # categorical data input
+    for categorical_var in cat_feats:
+        no_of_unique_cat = cardinality[categorical_var]
+        if verbose == 1:
+            print(categorical_var, no_of_unique_cat)
+        embedding_size = min(np.ceil(no_of_unique_cat / 2), emb_dim)
+        embedding_size = int(embedding_size)
+        vocab = no_of_unique_cat + 1
+
+        # functionnal loop
+        input_cat = tfkl.Input(
+            shape=(1,), name='input_{0}'.format(categorical_var))
+        inputs.append(input_cat)
+        embedding = tfkl.Embedding(vocab,
+                                   embedding_size,
+                                   embeddings_regularizer=tf.keras.regularizers.l2(1e-8),
+                                   name='embedding_{0}'.format(categorical_var))(input_cat)
+        embedding = tfkl.Dropout(0.15)(embedding) # best worked with Dropout()
+        vec = tfkl.Flatten(name='flatten_{0}'.format(
+            categorical_var))(embedding)
+        output_cat.append(vec)
+    output_cat = tfkl.Concatenate(name='concatenate_cat')(output_cat)
+
+    # concatenate numerical input and embedding output
+    dense = tfkl.Concatenate(name='concatenate_all')([output_num, output_cat])
+
+    # dense network
+    for i in range(len(layers_list)):
+        dense = tfkl.BatchNormalization()(dense) # change the way batchnorm is done 
+        dense = tfkl.Dense(layers_list[i],
+                           name='Dense_{0}'.format(str(i)),
+                           activation='elu')(dense)
+        dense = tfkl.Dropout(.15)(dense)
+
+    dense2 = tfkl.Dense(output_count, name='Output', activation='softmax')(dense) # initatialy elu
+    model = tfk.Model(inputs, dense2)
+
+    opt = optimizer(learning_rate)
+
+    model.compile(loss='categorical_crossentropy', optimizer=opt, metrics=[
+            tf.keras.metrics.RootMeanSquaredError()])
+ 
     return model
 
 

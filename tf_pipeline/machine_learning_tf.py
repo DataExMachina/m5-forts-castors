@@ -118,7 +118,7 @@ def predict(horizon="validation", task="volume"):
     elif task != "volume":
         raise ValueError("Wrong value for task.")
 
-    mdl = tfk.models.load_model((os.path.join(MODELS_PATH, "%s_%s_tf_stock.h5" % (horizon, task))))
+    mdl = tfk.models.load_model((os.path.join(MODELS_PATH, "%s_%s_full_best_tf.h5" % (horizon, task))))
 
     for i in tqdm(range(0, 28)):
         day = fday + timedelta(days=i)
@@ -192,9 +192,12 @@ def ml_pipeline(horizon="validation", task="volume", ml="predict"):
         predict(horizon, task)
     elif ml == "predict":
         predict(horizon, task)
+        os.system('shutdown -s')
+
     else:
         raise ValueError('ml arg must be "train_and_predict" or "predict" or "train_grid"')
 
 if __name__ == "__main__":
     fire.Fire(ml_pipeline)
+
 
