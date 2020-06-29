@@ -7,7 +7,7 @@ from tf_pipeline.conf import *
 import pandas as pd
 import os 
 import numpy as np 
-from datetime import datetime 
+from datetime import datetime, timedelta
 
 
 def create_dt(horizon="validation", tr_last=1913):
