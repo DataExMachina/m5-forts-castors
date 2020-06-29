@@ -125,13 +125,10 @@ def train_and_pred(horizon="validation"):
     
 
     list_preds = list()
-
     for _, df_gp in dataframe.groupby(['store_id', 'dept_id']):
 
         cat_feats = ['wday', 'quarter']
-
         n_items = len(df_gp['item_id'].drop_duplicates())    
-
         ids = df_gp[['id', 'item_id']].drop_duplicates()\
                                       .sort_values('item_id')['id']\
                                       .tolist()
@@ -148,7 +145,7 @@ def train_and_pred(horizon="validation"):
         num_feats = num_feats[:n_items]
         X = X.reset_index()
 
-        X_train = X[X['date']<fday][num_feats+cat_feats]
+        X_train = X[(X['date']<fday) & (X['date']>=fday - timedelta(days=364))][num_feats+cat_feats]
         X_test = X[X['date']>=fday][num_feats+cat_feats]
 
         input_dict_train = {'input_%s' % c: X_train[c] for c in num_feats+cat_feats}
@@ -156,7 +153,7 @@ def train_and_pred(horizon="validation"):
 
         cardinality = X[cat_feats].nunique()
 
-        y_train = X[X['date']<fday][target_feats].values
+        y_train = X[(X['date']<fday) & (X['date']>=fday - timedelta(days=364))][target_feats].values
 
         mlp = create_mlp_softmax(layers_list=[2048, 2048],
                                  output_count=n_items,
