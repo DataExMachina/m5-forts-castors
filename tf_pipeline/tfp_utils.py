@@ -8,9 +8,6 @@ import tensorflow as tf
 import tensorflow.keras as tfk
 import tensorflow.keras.backend as K
 import tensorflow_probability as tfp
-
-
-
 tfd = tfp.distributions
 
 # prior distribution on the weights 

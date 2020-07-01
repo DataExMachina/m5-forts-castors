@@ -2,6 +2,7 @@ from tf_utils import *
 import seaborn as sns
 import matplotlib.pyplot as plt
 import datetime 
+import numpy as np
 
 # imports we know we'll need only for BGS
 from skopt import gp_minimize
@@ -16,37 +17,37 @@ import tensorflow.keras as tfk
 from pprint import pprint 
 
 
-CAL_DTYPES={"event_name_1": "category",
-            "event_name_2": "category",
-            "event_type_1": "category", 
-            "event_type_2": "category",
-            "weekday": "category", 
-            'wm_yr_wk': 'int16', "wday": "int16",
-            "month": "int16", "year": "int16",
-            "snap_CA": "float32",
-            'snap_TX': 'float32',
-            'snap_WI': 'float32' }
-
-PRICE_DTYPES = {"store_id": "category",
-                "item_id": "category",
-                "wm_yr_wk": "int16", 
-                "sell_price":"float32" }
-
-cat_feats = ['item_id', 
-             'dept_id',
-             'store_id',
-             'cat_id',
-             'state_id'] +\
-            ["event_name_1",
-             "event_name_2",
-             "event_type_1",
-             "event_type_2"]
+# CAL_DTYPES={"event_name_1": "category",
+#             "event_name_2": "category",
+#             "event_type_1": "category",
+#             "event_type_2": "category",
+#             "weekday": "category",
+#             'wm_yr_wk': 'int16', "wday": "int16",
+#             "month": "int16", "year": "int16",
+#             "snap_CA": "float32",
+#             'snap_TX': 'float32',
+#             'snap_WI': 'float32' }
+#
+# PRICE_DTYPES = {"store_id": "category",
+#                 "item_id": "category",
+#                 "wm_yr_wk": "int16",
+#                 "sell_price":"float32" }
+#
+# cat_feats = ['item_id',
+#              'dept_id',
+#              'store_id',
+#              'cat_id',
+#              'state_id'] +\
+#             ["event_name_1",
+#              "event_name_2",
+#              "event_type_1",
+#              "event_type_2"]
 
 
 horizon="validation"
 task="volume"
+# useless_cols = ["id", "date", "sales","d", "wm_yr_wk", "weekday"]
 
-useless_cols = ["id", "date", "sales","d", "wm_yr_wk", "weekday"]
 h = 28 
 max_lags = 57
 tr_last = 1913
@@ -72,7 +73,7 @@ def create_dt(is_train = True, nrows = None, first_day = 1200):
     catcols = ['id', 'item_id', 'dept_id','store_id', 'cat_id', 'state_id']
     dtype = {numcol:"float32" for numcol in numcols} 
     dtype.update({col: "category" for col in catcols if col != "id"})
-    dt = pd.read_csv("./data/raw/sales_train_validation.csv", 
+    dt = pd.read_csv("./data/raw/sales_train_evaluation.csv", 
                      nrows = nrows, usecols = catcols + numcols, dtype = dtype)
     
     for col in catcols:
@@ -108,8 +109,6 @@ def create_fea(dt):
         for lag,lag_col in zip(lags, lag_cols):
             dt[f"rmean_{lag}_{win}"] = dt[["id", lag_col]].groupby("id")[lag_col].transform(lambda x : x.rolling(win).mean())
 
-    
-    
     date_features = {
         
         "wday": "weekday",
@@ -141,57 +140,80 @@ def fitness(learning_rate,
     return
 
 
-res = load((os.path.join(MODELS_PATH, "%s_%s_checkpoint.pkl" % (horizon, task))))
+res = load((MODELS_PATH+ "optim/validation_volume_checkpoint.pkl"))
 x0 = res.x_iters
 y0 = res.func_vals
 
-pprint(y0)
-pprint(x0)
-
-best_params = x0[7]
+best_params = x0[np.arrmin(y0)]
 
 learning_rate = best_params[0]
-num_epoch = 50#best_params[1]
+num_epoch = best_params[1]
 num_dense_layers = best_params[2]
 num_dense_nodes =  best_params[3]
 emb_dim = best_params[4]
 batch_size = best_params[5]
-loss_fn = best_params[6]
+loss_fn =  best_params[6]
 do_weigth = best_params[7]
+#
+#
+
+# FIRST_DAY = 1 # If you want to load all the data set it to '1' -->  Great  memory overflow  risk !
+# df = create_dt(is_train=True, first_day= FIRST_DAY)
+# print(df.shape)
+# create_fea(df)
+# df.dropna(inplace=True)
+#
+# # get the weights for the training (the older the sample the less it will have impact )
+# weights = df['d'].str[2:].astype(int)
+# weights = weights/np.max(weights)
+#
+# num_feats = df.columns[~df.columns.isin(useless_cols+cat_feats)].to_list()
+# train_cols = num_feats+cat_feats
+#
+# X_train = df[train_cols]
+# y_train = df["sales"]
+#
+#
+# cardinality  = df[cat_feats].max()
+# weights_train =  weights.loc[X_train.index]
+#
+# input_dict = {f"input_{col}": X_train[col] for col in X_train.columns}
+#
+# del df#,X_train
+# gc.collect()
 
 
-
-FIRST_DAY = 1 # If you want to load all the data set it to '1' -->  Great  memory overflow  risk !
-df = create_dt(is_train=True, first_day= FIRST_DAY)
-create_fea(df)
-print(f"MEMORY USAGE : {df.memory_usage().sum()/1e9}")
+df = pd.read_parquet(
+    os.path.join(REFINED_PATH, "%s_%s_fe.parquet" % (horizon, task))
+)
 df.dropna(inplace=True)
+
+num_feats = df.columns[~df.columns.isin(useless_cols + cat_feats)].to_list()
+train_cols = num_feats+cat_feats
+print(cat_feats)
+print(num_feats)
 
 # get the weights for the training (the older the sample the less it will have impact )
 weights = df['d'].str[2:].astype(int)
 weights = weights/np.max(weights)
 
-num_feats = df.columns[~df.columns.isin(useless_cols+cat_feats)].to_list()
-train_cols = num_feats+cat_feats
-
 X_train = df[train_cols]
 y_train = df["sales"]
-
 
 cardinality  = df[cat_feats].max()
 weights_train =  weights.loc[X_train.index]
 
 input_dict = {f"input_{col}": X_train[col] for col in X_train.columns}
 
-del df,X_train
-gc.collect()
-
 list_layer = [num_dense_nodes // (2 ** x) for x in range(num_dense_layers)]
-model = create_mlp(layers_list=list_layer, emb_dim=emb_dim, loss_fn=loss_fn, learning_rate=learning_rate,
-                   optimizer=tfk.optimizers.Adam, cat_feats=cat_feats, num_feats=num_feats,
-                   cardinality=cardinality, verbose=0)
+# model = create_mlp(layers_list=list_layer, emb_dim=emb_dim, loss_fn=loss_fn, learning_rate=learning_rate,
+#                    optimizer=tfk.optimizers.Adam, cat_feats=cat_feats, num_feats=num_feats,
+#                    cardinality=cardinality, verbose=0)
 
-model_save = tfk.callbacks.ModelCheckpoint('model_checkpoints', verbose=0)
+model = tfk.models.load_model((os.path.join(MODELS_PATH, "%s_%s_full_best_tf.h5" % (horizon, task))),custom_objects={'poisson': poisson})
+tfk.backend.set_value(model.optimizer.learning_rate,.001)
+print('>>> NN loaded, lr changed')
+model_save     = tfk.callbacks.ModelCheckpoint('model_checkpoints', verbose=0)
 early_stopping = tfk.callbacks.EarlyStopping('root_mean_squared_error',
                                              patience=15,
                                              verbose=0,
@@ -205,7 +227,7 @@ if do_weigth:
                         epochs=num_epoch,
                         shuffle=True,
                         sample_weight=weights_train.values,
-                        callbacks=[model_save, early_stopping],
+                        #callbacks=[model_save, early_stopping],
                         verbose=1,
                         )
 
@@ -215,8 +237,9 @@ else:
                         batch_size=batch_size,
                         epochs=num_epoch,
                         shuffle=True,
-                        callbacks=[model_save, early_stopping],
+                        #callbacks=[model_save, early_stopping],
                         verbose=1,
                         )
 
 model.save((os.path.join(MODELS_PATH, "%s_%s_full_best_tf.h5" % (horizon, task))))
+

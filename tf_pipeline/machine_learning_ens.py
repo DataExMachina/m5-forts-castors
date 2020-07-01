@@ -172,7 +172,7 @@ def predict(horizon="validation", task="volume", ensembling_type='avg'):
     # gather both models (before data to avoid memory spikes )
     print('>>>  load the two models ')
     m_lgb = lgb.Booster(
-        model_file=os.path.join(MODELS_PATH, "%s_%s_lgb.txt" % (horizon, task))
+        model_file=os.path.join(MODELS_PATH, "%s_%s_lgb.pickle" % (horizon, task))
     )
     print('--- lgbm ok  ')
     m_tf = tfk.models.load_model((os.path.join(MODELS_PATH, "%s_%s_tf.h5" % (horizon, task))))
@@ -201,7 +201,7 @@ def predict(horizon="validation", task="volume", ensembling_type='avg'):
             input_dict_predict = {f"input_{col}": tst[col] for col in train_cols}
             if ensembling_type == 'avg':
                 predictions = tst["rate"] * (m_lgb.predict(tst[train_cols]) + m_tf.predict(input_dict_predict,
-                                                                                           batch_size=10000).flatten()) / 2
+                                                                                           batch_size=10000).flatten().clip(0,None)) / 2
             dataframe.loc[dataframe.date == day, "sales"] = predictions
         elif task == "share":
             dataframe.loc[dataframe.date == day, "sales"] = m_lgb.predict(
@@ -242,7 +242,7 @@ def predict(horizon="validation", task="volume", ensembling_type='avg'):
 
     if task == "volume":
         te_sub.to_csv(
-            os.path.join(SUBMIT_PATH, "ens_estim_%s.csv" % horizon), index=False
+            os.path.join(SUBMIT_PATH, "recens_estim_%s.csv" % horizon), index=False
         )
     else:
         te_sub.to_csv(

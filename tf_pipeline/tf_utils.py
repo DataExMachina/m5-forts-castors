@@ -5,18 +5,17 @@ import tensorflow as tf
 import tensorflow.keras as tfk
 import gc
 import pickle
+from skopt import load
 
 from conf import cat_feats, REFINED_PATH, useless_cols, MODELS_PATH
 
 tfkl = tfk.layers
 K = tfk.backend
 np.random.seed(42)
-
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 
-## evaluation metric
 
-def df_to_tf(df, cat_feats, useless_cols, use_validation=True):
+def df_to_tf_volume(df, use_validation=True):
     """
     take a dataframe and turn it into the needed objects for tensorflow
 
@@ -53,15 +52,14 @@ def df_to_tf(df, cat_feats, useless_cols, use_validation=True):
 
     weights = df['d'].str[2:].astype(int)
     weights = weights / np.sum(weights)
-    weights_train = weights.loc[X_train.index]
+    weights = weights.loc[X_train.index]
     input_dict = {f"input_{col}": X_train[col] for col in X_train.columns}
 
     if use_validation:
         input_dict_test = {f"input_{col}": X_test[col] for col in X_train.columns}
-        return input_dict, y_train, input_dict_test, y_test, cardinality, weights_train
+        return input_dict, y_train, input_dict_test, y_test, cardinality, weights
     else:
-        return input_dict, y_train, cardinality, weights_train
-
+        return input_dict, y_train, cardinality, weights
 
 # loss functions
 def poisson(y_true, y_pred):
@@ -84,13 +82,11 @@ def tweedie_loss(y_true, y_pred):
     return K.mean(dev, axis=-1)
 
 
-alpha = .5
-
-
 def weighted_loss(y_true, y_pred):
     """
     make a comprised loss of poisson and tweedie distribution
     """
+    alpha = .5
     return (1 - alpha) * poisson(y_true, y_pred) + alpha * tweedie_loss(y_true, y_pred)
 
 
@@ -155,7 +151,7 @@ def create_mlp(layers_list=None, emb_dim=30, loss_fn='poisson', learning_rate=1e
                                    embedding_size,
                                    embeddings_regularizer=tf.keras.regularizers.l2(1e-8),
                                    name='embedding_{0}'.format(categorical_var))(input_cat)
-        embedding = tfkl.Dropout(0.15)(embedding) # best worked with Dropout()
+        embedding = tfkl.Dropout(0.15)(embedding)  # best worked with Dropout()
         vec = tfkl.Flatten(name='flatten_{0}'.format(
             categorical_var))(embedding)
         output_cat.append(vec)
@@ -166,13 +162,13 @@ def create_mlp(layers_list=None, emb_dim=30, loss_fn='poisson', learning_rate=1e
 
     # dense network
     for i in range(len(layers_list)):
-        dense = tfkl.BatchNormalization()(dense) # change the way batchnorm is done 
+        dense = tfkl.BatchNormalization()(dense)  # change the way batchnorm is done
         dense = tfkl.Dense(layers_list[i],
                            name='Dense_{0}'.format(str(i)),
                            activation='elu')(dense)
         dense = tfkl.Dropout(.15)(dense)
 
-    dense2 = tfkl.Dense(1, name='Output', activation='softplus')(dense) # initatialy elu
+    dense2 = tfkl.Dense(1, name='Output', activation='relu')(dense)  # initatialy elu
     model = tfk.Model(inputs, dense2)
 
     opt = optimizer(learning_rate)
@@ -189,18 +185,20 @@ def create_mlp(layers_list=None, emb_dim=30, loss_fn='poisson', learning_rate=1e
             "Loss function should be either Poisson or tweedie for now")
     return model
 
-
-    # function to generate the MLP
 def create_mlp_softmax(layers_list=None,
-						output_count  = None, 
-					    emb_dim=5,
-					     learning_rate=1e-3,
-					      optimizer=tfk.optimizers.Adam,
-               			  cat_feats=None,
-               			 num_feats=None,
-               			  cardinality=None,
-               			   verbose=0):
+                       output_count=None,
+                       emb_dim=5,
+                       learning_rate=1e-3,
+                       optimizer=tfk.optimizers.Adam,
+                       cat_feats=None,
+                       num_feats=None,
+                       cardinality=None,
+                       verbose=0):
+    '''
+    Generate an MLP in order to compute the weights of the top down method
+    (used for the train weight notebook)
 
+    '''
 
     # define our MLP network
     if cardinality is None:
@@ -208,7 +206,7 @@ def create_mlp_softmax(layers_list=None,
     if num_feats is None:
         num_feats = []
     if layers_list is None:
-        layers_list = [16,16,16]
+        layers_list = [16, 16]
 
     inputs = []
     output_cat = []
@@ -247,7 +245,7 @@ def create_mlp_softmax(layers_list=None,
                                    embedding_size,
                                    embeddings_regularizer=tf.keras.regularizers.l2(1e-8),
                                    name='embedding_{0}'.format(categorical_var))(input_cat)
-        embedding = tfkl.Dropout(0.15)(embedding) # best worked with Dropout()
+        embedding = tfkl.Dropout(0.15)(embedding)  # best worked with Dropout()
         vec = tfkl.Flatten(name='flatten_{0}'.format(
             categorical_var))(embedding)
         output_cat.append(vec)
@@ -258,24 +256,29 @@ def create_mlp_softmax(layers_list=None,
 
     # dense network
     for i in range(len(layers_list)):
-        dense = tfkl.BatchNormalization()(dense) # change the way batchnorm is done 
+        dense = tfkl.BatchNormalization()(dense)  # change the way batchnorm is done
         dense = tfkl.Dense(layers_list[i],
                            name='Dense_{0}'.format(str(i)),
                            activation='elu')(dense)
         dense = tfkl.Dropout(.15)(dense)
 
-    dense2 = tfkl.Dense(output_count, name='Output', activation='softmax')(dense) # initatialy elu
+    dense2 = tfkl.Dense(output_count, name='Output', activation='softmax')(dense)  # initatialy elu
     model = tfk.Model(inputs, dense2)
 
     opt = optimizer(learning_rate)
 
     model.compile(loss='categorical_crossentropy', optimizer=opt, metrics=[
-            tf.keras.metrics.RootMeanSquaredError()])
- 
+        tf.keras.metrics.RootMeanSquaredError()])
+
     return model
 
 
-def train_mlp(horizon="validation",task='volume', training_params=None):
+def train_mlp(horizon="validation",
+              task='volume',
+              ):
+    '''
+    Trains the mlp with the best parameters over the whole data
+    '''
     df = pd.read_parquet(
         os.path.join(REFINED_PATH, "%s_%s_fe.parquet" % (horizon, task))
     )
@@ -283,25 +286,39 @@ def train_mlp(horizon="validation",task='volume', training_params=None):
     df.dropna(inplace=True)
 
     num_feats = df.columns[~df.columns.isin(useless_cols + cat_feats)].to_list()
-    input_dict, y_train, cardinality, weights_train = df_to_tf(df, cat_feats, useless_cols, use_validation=False)
-    with open(MODELS_PATH + 'best_params.pkl', 'rb') as f:
-        params = pickle.load(f)
+    input_dict, y_train, cardinality, weights_train = df_to_tf(df, use_validation=False)
 
-    mdl = create_mlp(layers_list=[512, 512, 256, 256,256,128], #,params['layers_list'],
-                     emb_dim=30, #params['emb_dim'],
-                     loss_fn='tweedie', # params['loss_fn'],
-                     learning_rate=params['learning_rate'],
+    res = load((MODELS_PATH + "optim/validation_volume_checkpoint.pkl"))
+    x0 = res.x_iters
+    y0 = res.func_vals
+
+    best_params = x0[np.arrmin(y0)]
+
+    learning_rate = best_params[0]
+    num_epoch = best_params[1]
+    num_dense_layers = best_params[2]
+    num_dense_nodes = best_params[3]
+    emb_dim = best_params[4]
+    batch_size = best_params[5]
+    loss_fn = best_params[6]
+    do_weigth = best_params[7]
+    list_layer = [num_dense_nodes // (2 ** x) for x in range(num_dense_layers)]
+
+    mdl = create_mlp(layers_list=list_layer,  # ,params['layers_list'],
+                     emb_dim=emb_dim,  # params['emb_dim'],
+                     loss_fn=loss_fn,  # params['loss_fn'],
+                     learning_rate=learning_rate,
                      optimizer=tfk.optimizers.Adam,
                      cat_feats=cat_feats,
                      num_feats=num_feats,
-                     cardinality=params['cardinality'],
+                     cardinality=cardinality,
                      verbose=0)
     try:
         tfk.utils.plot_model(mdl, show_shapes=True)
     except:
         print('Impossible to plot the model')
 
-    # checkpointsthe model to reload the best parameters
+    # checkpoints the model to reload the best parameters
     model_save = tfk.callbacks.ModelCheckpoint('model_checkpoints',
                                                verbose=0)
 
@@ -310,28 +327,26 @@ def train_mlp(horizon="validation",task='volume', training_params=None):
                                                  patience=10,
                                                  verbose=0,
                                                  restore_best_weights=True)
+    if do_weigth:
+        training_params = {
+            'x': input_dict,
+            'y': y_train.values,
+            'batch_size': batch_size,
+            'epochs': num_epoch,
+            'shuffle': True,
+            'sample_weight': weights_train,
+            'callbacks': [model_save, early_stopping]
+        }
 
-    if training_params is None:
-        if params['do_weigth']:
-            training_params = {
-                'x': input_dict,
-                'y': y_train.values,
-                'batch_size': 4096,
-                'epochs': params['num_epoch'],
-                'shuffle': True,
-                'sample_weight': weights_train,
-                'callbacks': [model_save, early_stopping]
-            }
-        else:
-            training_params = {
-                'x': input_dict,
-                'y': y_train.values,
-                'batch_size': 4096,
-                'epochs': params['num_epoch'],
-                'shuffle': True,
-                'callbacks': [model_save, early_stopping]
-            }
+    else:
+        training_params = {
+            'x': input_dict,
+            'y': y_train.values,
+            'batch_size': batch_size,
+            'epochs': num_epoch,
+            'shuffle': True,
+            'callbacks': [model_save, early_stopping]
+        }
 
     mdl.fit(**training_params)
-
     mdl.save((os.path.join(MODELS_PATH, "%s_%s_tf.h5" % (horizon, task))))

@@ -12,6 +12,7 @@ import tensorflow as tf
 import tensorflow.keras as tfk
 from tf_utils import train_mlp
 from conf import *
+
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 
 def create_dt(horizon="validation", tr_last=1913):
@@ -100,7 +101,6 @@ def create_fea(dt):
             dt[date_feat_name] = getattr(dt["date"].dt, date_feat_func).astype("int16")
     return dt
 
-
 def predict(horizon="validation", task="volume"):
     if horizon == "validation":
         tr_last = 1913
@@ -118,7 +118,7 @@ def predict(horizon="validation", task="volume"):
     elif task != "volume":
         raise ValueError("Wrong value for task.")
 
-    mdl = tfk.models.load_model((os.path.join(MODELS_PATH, "%s_%s_full_best_tf.h5" % (horizon, task))))
+    mdl = tfk.models.load_model((os.path.join(MODELS_PATH, "%s_%s_tf.h5" % (horizon, task)))) # _tf for model of choice
 
     for i in tqdm(range(0, 28)):
         day = fday + timedelta(days=i)
@@ -134,6 +134,7 @@ def predict(horizon="validation", task="volume"):
 
         if task == "volume":
             predictions = mdl.predict(input_dict_predict, batch_size=10000)
+            predictions = np.where(predictions<0, 0, predictions)
 
             dataframe.loc[dataframe.date == day, "sales"] = tst["rate"] * predictions.ravel()
 
@@ -185,14 +186,12 @@ def predict(horizon="validation", task="volume"):
             os.path.join(EXTERNAL_PATH, "tf_weights_%s.csv" % horizon), index=False
         )
 
-
 def ml_pipeline(horizon="validation", task="volume", ml="predict"):
     if ml == "train_and_predict":
         train_mlp(horizon, task)
         predict(horizon, task)
     elif ml == "predict":
         predict(horizon, task)
-        os.system('shutdown -s')
 
     else:
         raise ValueError('ml arg must be "train_and_predict" or "predict" or "train_grid"')

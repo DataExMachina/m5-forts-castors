@@ -18,11 +18,11 @@ def create_fea(dt):
     wins = [7, 28]
     for win in wins:
         for lag, lag_col in zip(lags, lag_cols):
-            dt[f"rmean_{lag}_{win}"] = (
+            dt[f"rmean_{lag}_{win}"] = 
                 dt[["id", lag_col]]
                 .groupby("id")[lag_col]
                 .transform(lambda x: x.rolling(win).mean())
-            )
+            
 
     date_features = {
         "wday": "weekday",
@@ -38,7 +38,6 @@ def create_fea(dt):
             dt[date_feat_name] = dt[date_feat_name].astype("int16")
         else:
             dt[date_feat_name] = getattr(dt["date"].dt, date_feat_func).astype("int16")
-
 
 def compute_share(dt):
     shares = (
@@ -66,7 +65,6 @@ def data_prep(horizon="validation", task="volume"):
     dataframe.to_parquet(
         os.path.join(REFINED_PATH, "%s_%s_fe.parquet" % (horizon, task))
     )
-
 
 if __name__ == "__main__":
     fire.Fire(data_prep)
